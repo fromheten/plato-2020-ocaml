@@ -34,6 +34,8 @@ let rec occurs (v : Parse.id) (t : Parse.typ) : bool =
      List.exists
        (occurs v)
        s
+  | Parse.TDict (pos, key_typ, value_typ) ->
+     failwith "I do not yet understand what occurs should do in a TDict"
   | Parse.TArrow (pos, input, output) ->
      List.exists
        (occurs v)
@@ -41,9 +43,6 @@ let rec occurs (v : Parse.id) (t : Parse.typ) : bool =
   | Parse.TUnit pos -> false
   | Parse.TU8 pos -> false
   | Parse.TString pos -> false
-  (* | Parse.TUnion (pos, argname, (tag_name, body_typ) :: rest) ->
-   *    ((occurs v body_typ) || (occurs v (Parse.TUnion (pos, argname, rest))))
-   * | Parse.TUnion (pos, argname, []) -> false *)
 
 (* substitute Parse.typ s for all occurrences of variable v in Parse.typ t *)
 let rec subst (s : Parse.typ) (v : Parse.id) (t : Parse.typ) : Parse.typ =
@@ -60,6 +59,8 @@ let rec subst (s : Parse.typ) (v : Parse.id) (t : Parse.typ) : Parse.typ =
      Parse.TVector (_pos, subst s v u)
   | Parse.TSet (_pos, u) ->
      Parse.TSet (_pos, subst s v u)
+  | Parse.TDict (_pos, key_typ, value_typ) ->
+     failwith "subst for TDict - I do not yet understand this"
   | Parse.TTuple (_pos, u) ->
      Parse.TTuple (_pos, List.map (subst s v) u)
   | Parse.TArrow (_pos, input, output) ->
@@ -67,13 +68,6 @@ let rec subst (s : Parse.typ) (v : Parse.id) (t : Parse.typ) : Parse.typ =
   | Parse.TUnit _pos -> Parse.TUnit _pos
   | Parse.TU8 _pos -> Parse.TU8 _pos
   | Parse.TString _pos -> Parse.TString _pos
-(* | Parse.TUnion (_pos, argname, cases) ->
- *    Parse.TUnion (_pos
- *                 ,argname
-   *                 ,List.map
-   *                    (fun (tag_name, body_typ) ->
-   *                      (tag_name, (subst s v body_typ)))
-   *                    cases) *)
 
 (* apply a substitution righ to left *)
 let apply (s : substitution) (t : Parse.typ) : Parse.typ =
@@ -84,18 +78,6 @@ let rec unify_one (s : Parse.typ) (t : Parse.typ) : substitution =
   (* a substitution is a list of id * typ
 It describes the typ that should be inserted in place of the id *)
   match (s, t) with
-  (* | (Parse.TUnion _, _) -> failwith "TUnion (left) not implemented" *)
-  (* | (TArrow (_pos, _, _), TUnion _) -> failwith "TUnion (right) |(TArrow (_, _), TUnion _)" *)
-  (* | (TVar (_pos_v, x)
-   *   ,Parse.TUnion (_pos_u, argname, patterns_and_exprs)) ->
-   *    [x, Parse.TUnion (_pos_u, argname, patterns_and_exprs)] *)
-  (* | (TTuple _, TUnion _) -> failwith "TUnion (right) |(TTuple _, TUnion _)"
-   * | (TSet _, TUnion _) -> failwith "TUnion (right) |(TSet _, TUnion _)"
-   * | (TVector _, TUnion _) -> failwith "TUnion (right) |(TVector _, TUnion _)"
-   * | (TTerm (_pos, _, _), TUnion _) -> failwith "TUnion (right) |(TTerm (_, _), TUnion _)"
-   * | (TUnit _pos, TUnion _) -> failwith "TUnion (right) |(TUnit, TUnion _)"
-   * | (TString _pos, TUnion _) -> failwith "TUnion (right) |(TString, TUnion _)"
-   * | (TU8 _pos, TUnion _) -> failwith "TUnion (right) |(TU8, TUnion _) -> " *)
   | (Parse.TVar (_posl, x), Parse.TVar (_posr, y)) ->
      if x = y
      then []
@@ -349,6 +331,8 @@ let infer (expr: Parse.expr): (equation list * Parse.typ) =
            failwith "Parse.Tuple not implemented"
         | Parse.Vector (pos, children) ->
            failwith "Parse.Vector not implemented"
+        | Parse.Dict (pos, keys_and_vals) ->
+           failwith "Parse.Dict not implemented"
         | Parse.Set (pos, children) ->
            failwith "Parse.Set not implemented"
         | Parse.Ann (pos, given_typ, expr) ->

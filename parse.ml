@@ -20,8 +20,8 @@ type typ =
   | TTuple of position * typ list
   | TVector of position * typ
   | TSet of position * typ
+  | TDict of position * typ * typ (* key * value *)
   | TU8 of position
-  (* | TUnion of position * string * (string * typ) list (\* (union a (Some a) None) *\) *)
 
 type 'a pattern =
   | PSym of position * string
@@ -33,15 +33,12 @@ type expr =
   | Sym of position * string
   | U8 of position * int
   | String of position * string
-  | Tuple of position * expr list          (* pair, sum type, call it what you want *)
+  | Tuple of position * expr list          (* pair, sum type, nple, call it what you want *)
   | Unit of position
   | Vector of position * expr list
   | Set of position * expr list
   | Ann of position * typ * expr
-  (* | TaggedExpr of position * string * expr (\* belongs to a tagged union *\)
-   * | Match of position
-   *            * expr              (\* tag *\)
-   *            * (expr pattern * expr) list *)
+  | Dict of position * (expr * expr) list
 
 let char_list s =
   let rec exp i l =
@@ -758,87 +755,40 @@ let application
              ,appise (List.rev xs)))))
     source
 
-(* let match_expr expression source =
- *   let pattern = pattern expression in
+(* let let_expr expression: source ->  expr parseresult =
  *   (map
- *     	(andThen
- *     				(andThen
- *     							(andThen
- *     										(andThen
- *     													(literal "(")
- *     													(literal "match"))
- *     										expression)
- *     							(n_or_more 1 (andThen pattern expression)))
- *     				(literal ")"))
- *     	(Util.take_ok
- *     				(fun ((pos, rest),
- *     										(((((), ()), e), pairs_exprs_list), ())) ->
- *     						((pos, rest),
- *     							Match ((fst source, pos), e, pairs_exprs_list)))))
- *     source *)
+ *      (andThen
+ * 					   (andThen
+ * 								   (andThen
+ * 											   (andThen
+ * 														   (literal "(")
+ * 														   (literal "let"))
+ * 											   (n_or_more 1
+ * 														   (andThen
+ * 																	   (pattern expression)
+ * 																	   expression)))
+ * 								   expression)
+ * 					   (literal ")"))
+ *      (Util.take_ok
+ *         (fun
+ *            ((end_index, rest)
+ *            ,(((((), ()),
+ *                bindings),
+ *               body),
+ *              ())) ->
+ *           ((end_index, rest)
+ *           ,(expand_let body bindings))))) *)
 
-(* let begins_with_uppercase s =
- *   List.mem
- *     (List.hd (char_list s))
- *     (char_list "ABCDEFGHIJKLMOPQRSTUVXYZ")
- *
- * let tagged_expr expression =
- *   (map
- * 					(andThen
- * 						  (andThen
- * 									  (andThen
- * 												  (literal "(")
- * 												  (orElse symbol quoted_symbol))
- * 									  expression)
- * 						  (literal ")"))
- * 			  (function
- *       | Ok ((end_index, rest)
- * 								   ,((((), Sym (name_pos, name)), child), ()))
- *            when begins_with_uppercase name ->
- *          Ok ((end_index, rest)
- *             ,TaggedExpr (name_pos
- *                         ,name
- *                         ,child))
- *       | Ok ((end_index, rest)
- * 								   ,((((), Sym (name_pos, name)), child), ())) ->
- *          Error "Tags must begin with uppercase letter"
- *       | _ -> Error "tagged_expr given something where the name is not a symbol")) *)
-
-let rec expand_let body = function
-  | (PSym (pattern_pos, pattern), given_value) :: rest ->
-     App (pattern_pos
-         ,Lam (pattern_pos
-              ,[PSym (pattern_pos, pattern), expand_let body rest])
-         ,given_value)
-  | (PTag (ptag_pos, ptag_name, ptag_value), given_value) :: rest ->
-     failwith "can't expand let for PTag"
-  | [] ->
-     body
-
-let let_expr expression (source: source): expr parseresult =
-  (map
-     (andThen
-					   (andThen
-								   (andThen
-											   (andThen
-														   (literal "(")
-														   (literal "let"))
-											   (n_or_more 1
-														   (andThen
-																	   (pattern expression)
-																	   expression)))
-								   expression)
-					   (literal ")"))
-     (Util.take_ok
-        (fun
-           ((end_index, rest)
-           ,(((((), ()),
-               bindings),
-              body),
-             ())) ->
-          ((end_index, rest)
-          ,(expand_let body bindings)))))
-    source
+let dict expression source =
+  (map (andThen
+								  (andThen (literal "{")
+											  (n_or_more 0 (andThen expression expression)))
+								  (literal "}"))
+			  (Util.take_ok
+						  (fun ((pos, rest), (((), keys_and_vals), ())) ->
+								  ((pos, rest)
+          ,Dict ((0, pos), keys_and_vals)))))
+  source
 
 let rec expression (source_code: source): expr parseresult =
   orElse_list
@@ -849,36 +799,18 @@ let rec expression (source_code: source): expr parseresult =
     ; quoted_symbol
     ; symbol
     ; vector expression
+    ; dict expression
     ; set expression
     ; lambda expression
     ; deep_lambda expression
     ; annotation expression
-    ; let_expr expression
+    (* ; let_expr expression *)
     (* ; tagged_expr expression
      * ; match_expr expression *)
     ; application expression]
     source_code
 
 let negpos = (-1, -1)
-(* let match_expr_tests =
- *   [("Testing tagged_expr"
- *     ,tagged_expr expression (0, char_list "(Some (u8 123))元気")
- *     = Ok ((15, char_list "元気"), TaggedExpr ((1, 5), "Some", U8 ((10, 13), 123))))
- *   ;("Tags must begin with capital letter"
- *    ,tagged_expr expression (0, char_list "(some (u8 123))")
- *     = Error "Tags must begin with uppercase letter")
- *   ;("simple match"
- *    ,match_expr expression
- *       (0
- *       ,char_list "(match (Some (u8 1337))
- *                   (Some n) n
- *                   None (u8 0))")
- *     = Ok
- *         ((83, []),
- *          Match ((0, 83), TaggedExpr ((8, 12), "Some", U8 ((17, 21), 1337)),
- *                 [(PTag ((43, 47), "Some", Sym ((48, 49), "n")), Sym ((51, 52), "n"));
- *                  (PSym ((71, 75), "None"), U8 ((80, 81), 0))])))
- *   ] *)
 
 let expression_tests =
   [ ( "Why does this symbol not end at the space?"
@@ -972,7 +904,14 @@ let expression_tests =
   ; ("parse u8"
     , expression (0, char_list "  (u8 1337)")
       = Ok ((11, [])
-           ,U8 ((6, 10), 1337)))]
+           ,U8 ((6, 10), 1337)))
+  ; ("You know what they say about men with large vocabularies? They also have a large Dict"
+    , dict expression (0, char_list "{\"ichi\" 1 \"ni\" 2 \"san\" 3}")
+      = Ok ((19, []),
+            Dict ((0, 19),
+                  [(String ((1, 5), "ichi"), Sym ((6, 7), "1"));
+                   (String ((8, 10), "ni"), Sym ((11, 12), "2"));
+                   (String ((13, 16), "san"), Sym ((17, 18), "3"))])))]
 
 let typ_tests =
   [ ( "(-> (-> <> <>) (-> <> <>))"
@@ -1036,21 +975,16 @@ let rec string_of_typ = function
      char_list "#{"
      @ string_of_typ t
      @ char_list "}#"
+  | TDict (pos, key_t, value_t) ->
+     char_list "{"
+     @ string_of_typ key_t
+     @ char_list " "
+     @ string_of_typ value_t
+     @ char_list "}"
   | TU8 pos ->
      char_list "U8"
   | TTerm (pos, _, _) ->
      failwith "Terms are sacred"
-  (* | TUnion (pos, argname, tags_typs) ->
-   *    char_list
-   *      (Util.str ["(union "
-   *                ;argname
-   *                ;" "
-   *                ;Util.str (List.map (fun (tag, typ) ->
-   *                               Util.str [tag
-   *                                        ;string_of_char_list (string_of_typ typ)
-   *                                        ;"\n\t"])
-   *                             tags_typs)
-   *                ;")"]) *)
 
 let rec string_of_expr = function
   | U8 (pos, i) ->
@@ -1106,30 +1040,13 @@ let rec string_of_expr = function
      @ string_of_typ t
      @ char_list " "
      @ string_of_expr e
-  (* | TaggedExpr (pos, name, value) ->
-   *    char_list "("
-   *    @ char_list name
-   *    @ char_list " "
-   *    @ string_of_expr value *)
-  (* | Match (pos, x, cases) ->
-   *    char_list "(match "
-   *    @ string_of_expr x
-   *    @ char_list " "
-   *    @ List.fold_left
-   *        List.append
-   *        []
-   *        (List.map
-   *           (function
-   *            | (PSym (psym_pos, tag), body) ->
-   *               char_list tag
-   *               @ string_of_expr body
-   *            | (PTag (ptag_pos, name, child), body) ->
-   *               ['(']
-   *               @ char_list name
-   *               @ [' ']
-   *               @ string_of_expr child
-   *               @ [')'])
-   *           cases) *)
+  | Dict (pos, keys_and_vals) ->
+     char_list "{"
+     @ List.concat
+         (List.map
+            (fun (key, value) -> string_of_expr key @ string_of_expr value @ char_list "\n ")
+            keys_and_vals)
+     @ char_list "}"
 
 let src_to_src src =
   Util.take_ok
