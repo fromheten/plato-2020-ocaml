@@ -279,8 +279,10 @@ let string_of_env env =
   |> List.map (fun (str,ty) -> str ^ ": " ^ string_of_typ ty)
   |> String.concat ", "
 
+exception InferError of string
+
 (* infer all facts (equations) as possible about an expr *)
-let infer (expr: Parse.expr): (equation list * Parse.typ) =
+let infer (expr: Parse.expr): ((equation list * Parse.typ), string) result =
   let rec infer_rec
             (equations: equation list)
             (goals: (env * Parse.expr * Parse.typ) list)
@@ -320,7 +322,7 @@ let infer (expr: Parse.expr): (equation list * Parse.typ) =
                                             ,output_type)) :: equations in
            infer_rec new_equations new_goals
         | Parse.Lam (pos_lam, (Parse.PTag (pos_ptag, name, child), body) :: rest) ->
-           failwith "lam with ptag not supported"
+           raise (InferError "lam with ptag not supported")
         | Parse.Lam (pos, []) -> failwith (Util.str ["A lambda binding nothing makes no sense...pos: "
                                                     ;Parse.string_of_position pos])
         | Parse.Unit pos ->
@@ -332,61 +334,63 @@ let infer (expr: Parse.expr): (equation list * Parse.typ) =
            let new_equations = (ty, Parse.TString pos) :: equations in
            infer_rec new_equations rest_of_goals
         | Parse.Tuple (pos, children) ->
-           failwith "Parse.Tuple not implemented"
+           raise (InferError "Parse.Tuple not implemented")
         | Parse.Vector (pos, children) ->
-           failwith "Parse.Vector not implemented"
+           raise (InferError "Parse.Vector not implemented")
         | Parse.Dict (pos, keys_and_vals) ->
-           failwith "Parse.Dict not implemented"
+           raise (InferError "Parse.Dict not implemented")
         | Parse.Set (pos, children) ->
-           failwith "Parse.Set not implemented"
+           raise (InferError "Parse.Set not implemented")
         | Parse.Ann (pos, given_typ, expr) ->
-           failwith "Parse.Ann not implemented"
-        (* | Parse.TaggedExpr (pos_tag
-         *                    ,tag_name
-         *                    ,tagged_value) ->
-         *    let this_typ = Parse.TVar (pos_tag, 1337) in
-         *    let tagged_value_typ = Parse.TVar (pos_tag, 1338) in
-         *    let new_equations = (ty
-         *                        ,this_typ)
-         *                        :: equations in
-         *    let new_goals = (env, tagged_value, tagged_value_typ) :: rest_of_goals in
-         *    infer_rec new_equations new_goals
-         * | Parse.Match (pos_match
-         *               ,tag
-         *               ,((PSym (pos_psym
-         *                       ,pattern)
-         *                 ,body)
-         *                 :: rest_of_cases)) ->
-         *    let body_ty = gensym () in
-         *    let new_equations = (ty, body_ty) :: equations in
-         *    let new_goals = (env, body, body_ty)
-         *                    :: (env, Parse.Match (pos_match
-         *                                         ,tag
-         *                                         ,rest_of_cases)
-         *                        ,ty)
-         *                    :: rest_of_goals in
-         *    infer_rec new_equations new_goals
-         * | Parse.Match (pos_match
-         *               ,tag      (\* should be named something like "question" *\)
-         *               ,((Parse.PTag (pos_ptag
-         *                             ,name
-         *                             ,child)
-         *                 ,body)
-         *                 :: rest_of_cases)) ->
-         *    (\* FIXME HERE *\)
-         *    failwith "Parse.Match of PTag not implemented"
-         * (\* DONE *\)
-         * | Parse.Match (match_pos, tag, []) ->
-         *    infer_rec equations rest_of_goals *)
+           raise (InferError "Parse.Ann not implemented")
+       (* | Parse.TaggedExpr (pos_tag
+        *                    ,tag_name
+        *                    ,tagged_value) ->
+        *    let this_typ = Parse.TVar (pos_tag, 1337) in
+        *    let tagged_value_typ = Parse.TVar (pos_tag, 1338) in
+        *    let new_equations = (ty
+        *                        ,this_typ)
+        *                        :: equations in
+        *    let new_goals = (env, tagged_value, tagged_value_typ) :: rest_of_goals in
+        *    infer_rec new_equations new_goals
+        * | Parse.Match (pos_match
+        *               ,tag
+        *               ,((PSym (pos_psym
+        *                       ,pattern)
+        *                 ,body)
+        *                 :: rest_of_cases)) ->
+        *    let body_ty = gensym () in
+        *    let new_equations = (ty, body_ty) :: equations in
+        *    let new_goals = (env, body, body_ty)
+        *                    :: (env, Parse.Match (pos_match
+        *                                         ,tag
+        *                                         ,rest_of_cases)
+        *                        ,ty)
+        *                    :: rest_of_goals in
+        *    infer_rec new_equations new_goals
+        * | Parse.Match (pos_match
+        *               ,tag      (\* should be named something like "question" *\)
+        *               ,((Parse.PTag (pos_ptag
+        *                             ,name
+        *                             ,child)
+        *                 ,body)
+        *                 :: rest_of_cases)) ->
+        *    (\* FIXME HERE *\)
+        *    failwith "Parse.Match of PTag not implemented"
+        * (\* DONE *\)
+        * | Parse.Match (match_pos, tag, []) ->
+        *    infer_rec equations rest_of_goals *)
        )
   in
   let ty = gensym () in
-  (infer_rec [] [(empty_env, expr, ty)], ty)
+  try Ok (infer_rec [] [(empty_env, expr, ty)], ty) with
+  | InferError e -> Error e
 
 let infer_and_unify expr =
   match infer expr with
-  | (equations, typ) ->
-     apply (unify equations) typ
+  | Ok (equations, typ) ->
+     Ok (apply (unify equations) typ)
+  | Error e -> Error e
 
 let infer_tests =
   [("Inferring works"
@@ -394,8 +398,8 @@ let infer_tests =
       infer (Parse.App (negpos
                        ,Parse.Lam (negpos, [PSym (negpos, "x"), Sym (negpos, "x")])
                        ,Parse.Lam (negpos, [PSym (negpos, "y"), Sym (negpos, "y")]))))
-     = ([(Parse.TVar (negpos, 4), Parse.TVar (negpos, 5));
-         (Parse.TVar (negpos, 1), Parse.TArrow (negpos
+     = Ok ([(Parse.TVar (negpos, 4), Parse.TVar (negpos, 5));
+            (Parse.TVar (negpos, 1), Parse.TArrow (negpos
                                                ,Parse.TVar (negpos, 4)
                                                ,Parse.TVar (negpos, 5)));
          (Parse.TVar (negpos, 2), Parse.TVar (negpos, 3));
@@ -408,27 +412,27 @@ let infer_tests =
                                           ,Parse.Lam (negpos
                                                      ,[PSym (negpos, "y")
                                                       ,Sym (negpos, "x")])])))
-     = Parse.TArrow (negpos
-                    ,Parse.TVar (negpos, 4)
-                    ,Parse.TArrow (negpos
+     = Ok (Parse.TArrow (negpos
+                        ,Parse.TVar (negpos, 4)
+                        ,Parse.TArrow (negpos
                                   ,Parse.TVar (negpos, 3)
-                                  ,Parse.TVar (negpos, 4))))
+                                  ,Parse.TVar (negpos, 4)))))
   ; ("Type of Tuple",
      (__gensym_state__ := -1;
       infer_and_unify (Parse.Tuple (negpos
                                    ,[(Parse.U8 (negpos, 1))
                                     ;(Parse.U8 (negpos, 1))]))
-      = Parse.TTuple (negpos, [(TU8 negpos); (TU8 negpos)])) )
+      = Ok (Parse.TTuple (negpos, [(TU8 negpos); (TU8 negpos)]))) )
   ; ("Type of Dict"
     ,(__gensym_state__ := -1;
       infer_and_unify (Parse.Dict (negpos
                                   ,[Parse.U8 (negpos, 1)
                                    ,Parse.Lam (negpos, [PSym (negpos, "x"), Sym (negpos, "x")])]))
-      = Parse.TDict (negpos
-                    ,TU8 negpos
-                    ,TArrow (negpos
+      = Ok (Parse.TDict (negpos
+                        ,TU8 negpos
+                        ,TArrow (negpos
                             ,TU8 negpos
-                            ,TU8 negpos))))
+                            ,TU8 negpos)))))
    (* ;("match a union"
     *  , (__gensym_state__ := -1;
     *     infer_and_unify (Parse.Match ((0, 83)
@@ -441,26 +445,26 @@ let infer_tests =
     *                                    (PSym ((71, 75), "None")
     *                                    ,U8 ((80, 81), 0))]))
     *     = Parse.TU8 negpos)) *)
-  (* ;("infer (Some value)"
-   *  , (__gensym_state__ := -1;
-   *     (\* let option = Parse.TUnion (negpos
-   *      *                           ,"a"
-   *      *                           ,["Some", Parse.TVar (negpos, 123456)
-   *      *                            ;"None", Parse.TUnit negpos]) in *\)
-   *     infer_and_unify (Parse.TaggedExpr (negpos
-   *                                       ,"Some"
-   *                                       ,Parse.U8 (negpos, 1337)))
-   *     = Parse.TVar ((-1, -1), 1337)
-   *  (\* = Parse.TUnion (negpos
-   *   *                ,"a"
-   *      *                ,[("Some", Parse.TU8 negpos)
-   *      *                 ;("None", Parse.TUnit negpos)]) *\)))
-   * ;("infer None"
-   *  , (__gensym_state__ := -1;
-   *     (\* let option = Parse.TUnion (negpos,
-   *      *                            "a"
-   *      *                            ,["Some", Parse.TVar (negpos, 123456)
-   *      *                             ;"None", Parse.TUnit negpos]) in *\)
-   *     infer_and_unify (Parse.TaggedExpr (negpos
-   *                                       ,"None", Parse.U8 (negpos, 1337)))
-   *     = Parse.TVar ((-1, -1), 1337) (\* = option *\))) *)]
+   (* ;("infer (Some value)"
+    *  , (__gensym_state__ := -1;
+    *     (\* let option = Parse.TUnion (negpos
+    *      *                           ,"a"
+    *      *                           ,["Some", Parse.TVar (negpos, 123456)
+    *      *                            ;"None", Parse.TUnit negpos]) in *\)
+    *     infer_and_unify (Parse.TaggedExpr (negpos
+    *                                       ,"Some"
+    *                                       ,Parse.U8 (negpos, 1337)))
+    *     = Parse.TVar ((-1, -1), 1337)
+    *  (\* = Parse.TUnion (negpos
+    *   *                ,"a"
+    *      *                ,[("Some", Parse.TU8 negpos)
+    *      *                 ;("None", Parse.TUnit negpos)]) *\)))
+    * ;("infer None"
+    *  , (__gensym_state__ := -1;
+    *     (\* let option = Parse.TUnion (negpos,
+    *      *                            "a"
+    *      *                            ,["Some", Parse.TVar (negpos, 123456)
+    *      *                             ;"None", Parse.TUnit negpos]) in *\)
+    *     infer_and_unify (Parse.TaggedExpr (negpos
+    *                                       ,"None", Parse.U8 (negpos, 1337)))
+    *     = Parse.TVar ((-1, -1), 1337) (\* = option *\))) *)]

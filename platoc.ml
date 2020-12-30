@@ -62,17 +62,20 @@ let compile (src: string) =
   match Parse.expression (0
                          ,(Parse.char_list src)) with
   | Ok (_rest, expr) ->
-     let _ = Unify.infer_and_unify expr in
-     (match codegen_expr expr with
-      | Ok codegen_expr ->
-         (match cmdise codegen_expr with
-          | Ok program ->
-             Ok (Codegen.generate_program program)
-          | Error e -> Error (Util.str [ "cmdise expr error: "
-                                       ; e]))
-      | Error inner_err ->
-         Error (Util.str ["inner fail: "
-                         ;inner_err]))
+     (match Unify.infer_and_unify expr with
+      | Ok typ -> (match codegen_expr expr with
+                   | Ok codegen_expr ->
+                      (match cmdise codegen_expr with
+                       | Ok program ->
+                          Ok (Codegen.generate_program program)
+                       | Error e -> Error (Util.str [ "cmdise expr error: "
+                                                    ; e]))
+                   | Error inner_err ->
+                      Error (Util.str ["inner fail: "
+                                      ;inner_err]))
+      | Error e -> failwith e)
+
+
   | Error e ->
      Error (Util.str ["`Platoc.compile` Error: e: "
                      ;e])
