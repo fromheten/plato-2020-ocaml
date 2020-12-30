@@ -17,6 +17,7 @@ Compilation is dependent upon `ocamlopt`, `make`, `cc`. It uses no libraries but
 
 ## TODO
 
+* Structs
 * Unions/Enums
 * Compile-time dependencies referred to by hash
 * Command based effects system

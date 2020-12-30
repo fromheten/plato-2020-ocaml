@@ -215,6 +215,10 @@ It describes the typ that should be inserted in place of the id *)
      if occurs x t
      then failwith "not unifiable: ciruclarity in (Parse.TVar x, (Parse.TArrow (_, _) as t))"
      else [(x, t)]
+  | (_, Parse.TDict _) -> failwith "COOL TDICT on the right"
+  | (TDict (_, _, _),
+     (TVar (_, _)|TTerm (_, _, _)|TArrow (_, _, _)|TUnit _|TString _|
+      TTuple (_, _)|TVector (_, _)|TSet (_, _)|TU8 _)) -> failwith "COOL TDICT on the left"
   | (TSym (pos, s), _) -> failwith "Symbol stuff not done"
   | (_, TSym (pos, s)) -> failwith "Symbol stuff not done"
 
@@ -409,18 +413,34 @@ let infer_tests =
                     ,Parse.TArrow (negpos
                                   ,Parse.TVar (negpos, 3)
                                   ,Parse.TVar (negpos, 4))))
-  (* ;("match a union"
-   *  , (__gensym_state__ := -1;
-   *     infer_and_unify (Parse.Match ((0, 83)
-   *                                  ,TaggedExpr ((8, 12)
-   *                                              ,"Some"
-   *                                              ,U8 ((17, 21), 1337))
-   *                                  ,[(PTag ((43, 47), "Some", Sym ((48, 49), "n"))
-   *                                    ,Sym ((51, 52), "n"));
-   *
-   *                                    (PSym ((71, 75), "None")
-   *                                    ,U8 ((80, 81), 0))]))
-   *     = Parse.TU8 negpos)) *)
+  ; ("Type of Tuple",
+     (__gensym_state__ := -1;
+      infer_and_unify (Parse.Tuple (negpos
+                                   ,[(Parse.U8 (negpos, 1))
+                                    ;(Parse.U8 (negpos, 1))]))
+      = Parse.TTuple (negpos, [(TU8 negpos); (TU8 negpos)])) )
+  ; ("Type of Dict"
+    ,(__gensym_state__ := -1;
+      infer_and_unify (Parse.Dict (negpos
+                                  ,[Parse.U8 (negpos, 1)
+                                   ,Parse.Lam (negpos, [PSym (negpos, "x"), Sym (negpos, "x")])]))
+      = Parse.TDict (negpos
+                    ,TU8 negpos
+                    ,TArrow (negpos
+                            ,TU8 negpos
+                            ,TU8 negpos))))
+   (* ;("match a union"
+    *  , (__gensym_state__ := -1;
+    *     infer_and_unify (Parse.Match ((0, 83)
+    *                                  ,TaggedExpr ((8, 12)
+    *                                              ,"Some"
+    *                                              ,U8 ((17, 21), 1337))
+    *                                  ,[(PTag ((43, 47), "Some", Sym ((48, 49), "n"))
+    *                                    ,Sym ((51, 52), "n"));
+    *
+    *                                    (PSym ((71, 75), "None")
+    *                                    ,U8 ((80, 81), 0))]))
+    *     = Parse.TU8 negpos)) *)
   (* ;("infer (Some value)"
    *  , (__gensym_state__ := -1;
    *     (\* let option = Parse.TUnion (negpos
