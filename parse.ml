@@ -80,10 +80,10 @@ let rec strip_starting_spaces (source: source): source =
   match source with
   | (pos, x :: rest) when is_spacing x ->
      strip_starting_spaces (pos + 1, rest)
-  | (pos, x :: rest) when not (is_spacing x) ->
+  | (_pos, x :: _rest) when not (is_spacing x) ->
      source
   | (pos, []) -> (pos, [])
-  | (pos, x :: rest) -> failwith "strip_starting_spaces: will never happen"
+  | (_pos, _x :: _rest) -> failwith "strip_starting_spaces: will never happen"
 
 let strip_starting_spaces_tests =
   [("strip this should work"
@@ -105,18 +105,18 @@ let symbol (source: source): expr parseresult =
   let rec inner (s: source) (is_escaping: bool) (acc: char list) =
     match (is_escaping, s) with
     (* Skip whitespaces in the beginning *)
-    | (false, (pos, first :: rest)) when
+    | (false, (_pos, first :: _rest)) when
            List.length acc = 0 && is_spacing first ->
        failwith "should never happen "
     | (false, (pos, first :: rest)) when first = '\\' ->
        inner (pos + 1, rest) true acc
     | (false, (pos, first :: rest)) when is_symbol_char first ->
        inner (pos + 1, rest) false (first :: acc)
-    | (false, (pos, first :: rest))
+    | (false, (pos, first :: _rest))
          when not (is_symbol_char first) && List.length acc > 0 ->
        Ok (s
           ,Sym ((start_pos, pos), string_of_char_list (List.rev acc)))
-    | (false, (pos, first :: rest))
+    | (false, (_pos, first :: rest))
          when not (is_symbol_char first)
               && List.length acc = 0 ->
        Error (Util.str ["Invalid symbol '"
@@ -133,8 +133,8 @@ let symbol (source: source): expr parseresult =
        Ok ((pos, [])
           ,Sym ((start_pos, pos), string_of_char_list (List.rev acc)))
     | ((true, (_, _::_))) -> Error "Should never happen"
-    | (false, (pos, [])) -> Error "`symbol` got an empty string - can't parse that into a Sym"
-    | (false, (pos, x :: rest)) -> Error "Lastests option"
+    | (false, (_pos, [])) -> Error "`symbol` got an empty string - can't parse that into a Sym"
+    | (false, (_pos, _x :: _rest)) -> Error "Lastests option"
   in inner
        source
        false
@@ -150,9 +150,9 @@ let symbol_native_string =
   map
     symbol
     (function
-     | Ok (state, Sym (sym_pos, result)) ->
+     | Ok (state, Sym (_sym_pos, result)) ->
         Ok (state, result)
-     | Ok ((index, rest), _) ->
+     | Ok ((index, _rest), _) ->
         Error (Util.str ["Result of symbol_native_string not a Symbol - at position "
                         ;string_of_int index])
      | Error e -> Error e)
@@ -175,7 +175,7 @@ let symbol_tests =
 let quoted_symbol (source: source) =
   let src_without_preceding_spacings: source = strip_starting_spaces source in
   match src_without_preceding_spacings with
-  | (start_pos, first :: rest) when first = '\'' ->
+  | (start_pos, first :: _rest) when first = '\'' ->
      let rec inner (s: source) (is_escaping: bool) acc =
        (match (is_escaping, s) with
         | (false, (pos, first :: rest))
@@ -197,7 +197,7 @@ let quoted_symbol (source: source) =
            inner (pos + 1, rest) true acc
         | (false, (pos, first :: rest)) ->
            inner (pos + 1, rest) false (first :: acc)
-        | (true, (pos, [])) -> Error "escaping EOF?"
+        | (true, (_pos, [])) -> Error "escaping EOF?"
         | _ -> failwith (Util.str [ "is_escaping: "
                                   ; "\""
                                   ; string_of_bool is_escaping
@@ -216,7 +216,7 @@ let quoted_symbol (source: source) =
 let string (source: source): expr parseresult =
   let src_without_preceding_spacings = (strip_starting_spaces source) in
   match src_without_preceding_spacings with
-  | (start_pos, first :: rest) when first = '"' ->
+  | (start_pos, first :: _rest) when first = '"' ->
      let rec inner
                (s: source)
                (is_escaping: bool)
@@ -308,8 +308,8 @@ let literal (lit: string) (source: source): unit parseresult =
       ,(position, src_first :: src_rest))
          when lit_first = src_first ->
        inner lit_rest (position, src_rest) (src_first :: acc)
-    | (lit_first :: lit_rest
-      ,(position, src_first :: src_rest)) ->
+    | (_lit_first :: _lit_rest
+      ,(_position, _src_first :: _src_rest)) ->
        Error
          (Util.str
             ["Source '"
@@ -323,7 +323,7 @@ let literal (lit: string) (source: source): unit parseresult =
                 ,snd curr_source)
                ,())
        else failwith "Bug in literal"
-    | (lit_first :: lit_rest, (position, [])) ->
+    | (_lit_first :: _lit_rest, (_position, [])) ->
        Error "Source too short"
   in inner
        lit_list
@@ -551,7 +551,7 @@ let rec undeepen (source: source) (patterns_exps: (expr list * expr) list) =
         (match undeepen
                  source
                  [(rest, e)] with
-         | (new_source_code, x) -> x))
+         | (_new_source_code, x) -> x))
     | _ -> failwith "undeepen yourself brah"
   in
   (source
@@ -572,7 +572,7 @@ let deep_lambda (expr: source -> expr parseresult) (source: source) =
                        ())) -> undeepen new_source_code
                                  (List.map
                                     (function
-                                     | (Vector (vec_pos, v), e) -> (v, e)
+                                     | (Vector (_vec_pos, v), e) -> (v, e)
                                      | _ -> failwith "Give me vector or give me death")
                                     patterns_exprs))))
     source
@@ -947,53 +947,53 @@ let string_of_sym s =
   else s_list
 
 let rec string_of_typ = function
-  | TSym (pos, s) ->
+  | TSym (_pos, s) ->
      string_of_sym s
-  | TUnit pos ->
+  | TUnit _pos ->
      char_list "<>"
-  | TString pos ->
+  | TString _pos ->
      char_list "String"
-  | TVar (pos, n) ->
+  | TVar (_pos, n) ->
      char_list "(TVar "
      @ char_list (string_of_int n)
      @ char_list ")"
-  | TTuple (pos, t) ->
+  | TTuple (_pos, t) ->
      char_list "<"
      @ List.concat (List.map string_of_typ t)
      @ char_list ">"
-  | TArrow (pos, t0, t1) ->
+  | TArrow (_pos, t0, t1) ->
      char_list "(-> "
      @ string_of_typ t0
      @ char_list " "
      @ string_of_typ t1
      @ char_list ")"
-  | TVector (pos, t) ->
+  | TVector (_pos, t) ->
      char_list "["
      @ string_of_typ t
      @ char_list "]"
-  | TSet (pos, t) ->
+  | TSet (_pos, t) ->
      char_list "#{"
      @ string_of_typ t
      @ char_list "}#"
-  | TDict (pos, key_t, value_t) ->
+  | TDict (_pos, key_t, value_t) ->
      char_list "{"
      @ string_of_typ key_t
      @ char_list " "
      @ string_of_typ value_t
      @ char_list "}"
-  | TU8 pos ->
+  | TU8 _pos ->
      char_list "U8"
-  | TTerm (pos, _, _) ->
+  | TTerm (_pos, _, _) ->
      failwith "Terms are sacred"
 
 let rec string_of_expr = function
-  | U8 (pos, i) ->
+  | U8 (_pos, i) ->
      ['('; 'u'; '8';' ']
      @ char_list (string_of_int i)
      @ [')']
-  | Sym (pos, s) ->
+  | Sym (_pos, s) ->
      string_of_sym s
-  | Lam (pos, patterns_exprs) ->
+  | Lam (_pos, patterns_exprs) ->
      (char_list "(λ ")
      @ List.concat
          (List.concat
@@ -1013,34 +1013,34 @@ let rec string_of_expr = function
                )
                patterns_exprs))
      @ [')']
-  | App (pos, e0, e1) ->
+  | App (_pos, e0, e1) ->
      ['(']
      @ string_of_expr e0
      @ [' ']
      @ string_of_expr e1
      @ [')']
-  | String (pos, s) ->
+  | String (_pos, s) ->
      ['"'] @ char_list s @ ['"']
-  | Tuple (pos, exprs) ->
+  | Tuple (_pos, exprs) ->
      ['<']
      @ List.concat (List.map string_of_expr exprs)
      @ ['>']
-  | Unit pos ->
+  | Unit _pos ->
      ['<'; '>']
-  | Vector (pos, exprs) ->
+  | Vector (_pos, exprs) ->
      ['[']
      @ List.concat (List.map string_of_expr exprs)
      @ [']']
-  | Set (pos, exprs) ->
+  | Set (_pos, exprs) ->
      ['#'; '{']
      @ List.concat (List.map string_of_expr exprs)
      @ ['}'; '#']
-  | Ann (pos, t, e) ->
+  | Ann (_pos, t, e) ->
      char_list "(Ann "
      @ string_of_typ t
      @ char_list " "
      @ string_of_expr e
-  | Dict (pos, keys_and_vals) ->
+  | Dict (_pos, keys_and_vals) ->
      char_list "{"
      @ List.concat
          (List.map
@@ -1090,48 +1090,50 @@ let parse_arg_test_results source =
 
 let parse_output_exe source =
   (map
-			  (andThen
-						  (andThen
-									  (orElse
+     (andThen
+	(andThen
+	   (orElse
               (literal "--output")
               (literal "-o"))
-									  symbol_native_string)
-						  (n_or_more 1 symbol_native_string))
-			  (function
-      | Ok ((index, rest), (((), output_file), [])) ->
+	   symbol_native_string)
+	(n_or_more 1 symbol_native_string))
+     (function
+      | Ok ((_index, _rest), (((), _output_file), [])) ->
          Error "No input files given - add some source file name(s) at the end of the command"
       | Ok ((index, rest), (((), output_file), input_files)) ->
-									Ok ((index, rest)
+	 Ok ((index, rest)
             ,OutputExeToPath (((fst source)
                               ,index)
                             , { input_files = input_files
-																												  ; output_file = output_file}))
+			      ; output_file = output_file}))
       | Error e -> Error e))
     source
 
 let parse_output_c source =
   (map
-			  (andThen
-						  (andThen
-									  (orElse
+     (andThen
+	(andThen
+	   (orElse
               (literal "--output-c")
               (literal "-oc"))
-									  symbol_native_string)
-						  (n_or_more 1 symbol_native_string))
-			  (function
-      | Ok ((index, rest), (((), output_file), [])) ->
+	   symbol_native_string)
+	(n_or_more 1 symbol_native_string))
+     (function
+      | Ok ((_index, _rest), (((), _output_file), [])) ->
          Error "No input files given - add some source file name(s) at the end of the command"
       | Ok ((index, rest), (((), output_file), input_files)) ->
-									Ok ((index, rest)
+	 Ok ((index, rest)
             ,OutputCToPath (((fst source)
                             ,index)
                           , { input_files = input_files
-																												; output_file = output_file}))
+			    ; output_file = output_file}))
       | Error e -> Error e))
     source
 
 let print_help (source: source) =
-  (map (literal "--help")
+  (map (orElse_list [(literal "--help")
+                    ;(literal "-h")
+                    ;(literal "")])
      (function
       | Ok ((index, rest), ()) ->
          Ok ((index, rest)

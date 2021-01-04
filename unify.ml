@@ -17,41 +17,41 @@ type substitution =
 (* check if a variable v occurs in a Parse.typ t *)
 let rec occurs (v : Parse.id) (t : Parse.typ) : bool =
   match t with
-  | Parse.TVar (pos, y) ->
+  | Parse.TVar (_pos, y) ->
      v = y
-  | Parse.TSym (pos, y) ->
+  | Parse.TSym (pos, _y) ->
      failwith (Util.str ["Can't do textual symbols just yet - the type `id` should be a union. Error at position: "
                         ;Parse.string_of_position pos])
-  | Parse.TTerm (pos, _, s) ->
+  | Parse.TTerm (_pos, _, s) ->
      List.exists
        (occurs v)
        s
-  | Parse.TVector (pos, s) ->
+  | Parse.TVector (_pos, s) ->
      (occurs v s)
-  | Parse.TSet (pos, s) ->
+  | Parse.TSet (_pos, s) ->
      (occurs v s)
-  | Parse.TTuple (pos, s) ->
+  | Parse.TTuple (_pos, s) ->
      List.exists
        (occurs v)
        s
-  | Parse.TDict (pos, key_typ, value_typ) ->
+  | Parse.TDict (_pos, _key_typ, _value_typ) ->
      failwith "I do not yet understand what occurs should do in a TDict"
-  | Parse.TArrow (pos, input, output) ->
+  | Parse.TArrow (_pos, input, output) ->
      List.exists
        (occurs v)
        [input; output]
-  | Parse.TUnit pos -> false
-  | Parse.TU8 pos -> false
-  | Parse.TString pos -> false
+  | Parse.TUnit _pos -> false
+  | Parse.TU8 _pos -> false
+  | Parse.TString _pos -> false
 
 (* substitute Parse.typ s for all occurrences of variable v in Parse.typ t *)
 let rec subst (s : Parse.typ) (v : Parse.id) (t : Parse.typ) : Parse.typ =
   match t with
-  | Parse.TVar (pos, y) ->
+  | Parse.TVar (_pos, y) ->
      if v = y
      then s
      else t
-  | Parse.TSym (pos, y) ->
+  | Parse.TSym (_pos, _y) ->
      failwith "Yeah this ain't gonna happen"
   | Parse.TTerm (pos, f, u) ->
      Parse.TTerm (pos, f, List.map (subst s v) u)
@@ -59,7 +59,7 @@ let rec subst (s : Parse.typ) (v : Parse.id) (t : Parse.typ) : Parse.typ =
      Parse.TVector (_pos, subst s v u)
   | Parse.TSet (_pos, u) ->
      Parse.TSet (_pos, subst s v u)
-  | Parse.TDict (_pos, key_typ, value_typ) ->
+  | Parse.TDict (_pos, _key_typ, _value_typ) ->
      failwith "subst for TDict - I do not yet understand this"
   | Parse.TTuple (_pos, u) ->
      Parse.TTuple (_pos, List.map (subst s v) u)
@@ -97,121 +97,122 @@ It describes the typ that should be inserted in place of the id *)
      [x, Parse.TString posr]
   | (Parse.TVar (_posl, x), Parse.TU8 posr) ->
      [x, Parse.TU8 posr]
-  | (Parse.TUnit posl, Parse.TVar (posr, x)) ->
+  | (Parse.TUnit posl, Parse.TVar (_posr, x)) ->
      [(x, Parse.TUnit posl)]
-  | (Parse.TU8 posl, Parse.TVar (posr, x)) ->
+  | (Parse.TU8 posl, Parse.TVar (_posr, x)) ->
      [(x, Parse.TU8 posl)]
-  | (Parse.TString posl, Parse.TVar (posr, x)) ->
+  | (Parse.TString posl, Parse.TVar (_posr, x)) ->
      [(x, Parse.TString posl)]
-  | (Parse.TTerm (posl, f, sc)
-    ,(Parse.TUnit posr | Parse.TString posr | Parse.TU8 posr)) ->
+  | (Parse.TTerm (_posl, _f, _sc)
+    ,(Parse.TUnit _posr | Parse.TString _posr | Parse.TU8 _posr)) ->
      failwith "Not unifiable: Head symbol conflict in (Parse.TTerm (f, sc), TParse.TUnit (g))"
-  | (Parse.TVector (posl, sc)
-    , (Parse.TUnit posr | Parse.TString posr | Parse.TArrow (posr, _, _) | Parse.TU8 posr)) ->
+  | (Parse.TVector (_posl, _sc)
+    , (Parse.TUnit _posr | Parse.TString _posr | Parse.TArrow (_posr, _, _) | Parse.TU8 _posr)) ->
      failwith "Not unifiable: Head symbol conflict in (Parse.TVector (f, sc), TParse.TUnit (g))"
-  | (Parse.TVector (posl, sc), Parse.TVector (posr, tc)) ->
+  | (Parse.TVector (_posl, sc), Parse.TVector (_posr, tc)) ->
      unify [(sc, tc)]
-  | (Parse.TSet (posl, sc), (Parse.TUnit posr | Parse.TString posr | Parse.TU8 posr)) ->
+  | (Parse.TSet (_posl, _sc), (Parse.TUnit _posr | Parse.TString _posr | Parse.TU8 _posr)) ->
      failwith "Not unifiable: Head symbol conflict in (Parse.TSet (f, sc), TParse.TUnit (g))"
-  | (Parse.TTuple (posl, sc)
-    ,(Parse.TUnit posr | Parse.TString posr | Parse.TU8 posr)) ->
+  | (Parse.TTuple (_posl, _sc)
+    ,(Parse.TUnit _posr | Parse.TString _posr | Parse.TU8 _posr)) ->
      failwith "Not unifiable: Head symbol conflict in (Parse.TTuple (f, sc), Parse.TUnit)"
-  | (Parse.TArrow (posl, input, output)
-    ,(Parse.TUnit posr | Parse.TString posr | Parse.TU8 posr)) ->
+  | (Parse.TArrow (_posl, _input, _output)
+    ,(Parse.TUnit _posr | Parse.TString _posr | Parse.TU8 _posr)) ->
      failwith "Not unifiable: Head symbol conflict in (Parse.TArrow (input, output), TParse.TUnit)"
-  | ((Parse.TUnit posl | Parse.TU8 posl | Parse.TString posl)
-    , Parse.TTerm (posr, g, [])) ->
+  | ((Parse.TUnit _posl | Parse.TU8 _posl | Parse.TString _posl)
+    , Parse.TTerm (_posr, _g, [])) ->
      []
-  | ((Parse.TUnit posl | Parse.TString posl | Parse.TU8 posl)
-    , Parse.TTerm (posr, g, tc)) ->
+  | ((Parse.TUnit _posl | Parse.TString _posl | Parse.TU8 _posl)
+    , Parse.TTerm (_posr, _g, _tc)) ->
      failwith "Not unifiable: TParse.TUnit Head symbol conflict in (TParse.TUnit (f), Parse.TTerm (g, tc))"
-  | ((Parse.TUnit posl | Parse.TString posl | Parse.TU8 posl)
-    , (Parse.TVector (posr, tc) | Parse.TSet (posr, tc))) ->
+  | ((Parse.TUnit _posl | Parse.TString _posl | Parse.TU8 _posl)
+    , (Parse.TVector (_posr, _tc) | Parse.TSet (_posr, _tc))) ->
      failwith "Not unifiable: TParse.TUnit Head symbol conflict in (TParse.TUnit (f), Parse.TVector (g, tc))"
-  | ((Parse.TUnit posl | Parse.TString posl | Parse.TU8 posl)
-    , Parse.TTuple (posr, [])) ->
+  | ((Parse.TUnit _posl | Parse.TString _posl | Parse.TU8 _posl)
+    , Parse.TTuple (_posr, [])) ->
      []
-  | ((Parse.TUnit posl | Parse.TString posl | Parse.TU8 posl)
-    , Parse.TTuple (posr, tc)) ->
+  | ((Parse.TUnit _posl | Parse.TString _posl | Parse.TU8 _posl)
+    , Parse.TTuple (_posr, _tc)) ->
      failwith "Not unifiable: TParse.TUnit Head symbol conflict in ((Parse.TUnit | Parse.TString | Parse.TU8), Parse.TTuple tc)"
-  | ((Parse.TUnit posl | Parse.TString posl | Parse.TU8 posl)
-    , Parse.TArrow (posr, input, output)) ->
+  | ((Parse.TUnit _posl | Parse.TString _posl | Parse.TU8 _posl)
+    , Parse.TArrow (_posr, _input, _output)) ->
      failwith "Not unifiable: TParse.TUnit Head symbol conflict in (Parse.TUnit, Parse.TArrow (input, output))"
-  | (Parse.TTerm (posl, f, sc)
-    ,Parse.TArrow (posr, input, output)) ->
+  | (Parse.TTerm (_posl, _f, _sc)
+    ,Parse.TArrow (_posr, _input, _output)) ->
      failwith "Not unifiable: Parse.TArrow is not Head, symbol conflict"
-  | (Parse.TTerm (posl, f, sc)
-    , Parse.TTerm (posr, g, tc)) -> (* Parse.TTerm * Parse.TTerm *)
+  | (Parse.TTerm (_posl, f, sc)
+    , Parse.TTerm (_posr, g, tc)) -> (* Parse.TTerm * Parse.TTerm *)
      if f = g && List.length sc = List.length tc
      then unify (List.combine sc tc)
      else failwith "Not unifiable: Head symbol conflict"
-  | ((Parse.TVector (posl, sc) | Parse.TSet (posl, sc))
-    ,Parse.TTerm (posr, g, tc)) ->
+  | ((Parse.TVector (_posl, _sc) | Parse.TSet (_posl, _sc))
+    ,Parse.TTerm (_posr, _g, _tc)) ->
      failwith "Not unifiable: Head symbol conflict"
-  | (Parse.TTerm (posl, f, sc)
-    , (Parse.TVector (posr, tc) | Parse.TSet (posr, tc))) ->
+  | (Parse.TTerm (_posl, _f, _sc)
+    , (Parse.TVector (_posr, _tc) | Parse.TSet (_posr, _tc))) ->
      failwith "Not unifiable: Head symbol conflict"
-  | (Parse.TTuple (posl, sc)
-    , Parse.TTerm (posr, f, tc))
-    | (Parse.TTerm (posl, f, sc), Parse.TTuple (posr, tc)) ->
+  | (Parse.TTuple (_posl, _sc)
+    , Parse.TTerm (_posr, _f, _tc))
+    | (Parse.TTerm (_posl, _f, _sc), Parse.TTuple (_posr, _tc)) ->
      failwith "Not unifiable: Head symbol conflict"
-  | (Parse.TArrow (posl, input, output)
-    ,Parse.TTerm (posr, g, tc)) ->
+  | (Parse.TArrow (_posl, _input, _output)
+    ,Parse.TTerm (_posr, _g, _tc)) ->
      failwith "Not unifiable: Parse.TArrow and Parse.TTerm Head symbol conflict"
-  | (Parse.TVar (posl, x)
-    ,(Parse.TTerm (posr, _, _) as t))
-    | ((Parse.TTerm (posl, _,_) as t), Parse.TVar (posr, x)) ->
+  | (Parse.TVar (_posl, x)
+    ,(Parse.TTerm (_posr, _, _) as t))
+    | ((Parse.TTerm (_posl, _,_) as t),
+       Parse.TVar (_posr, x)) ->
      if occurs x t
      then failwith "not unifiable: ciruclarity in (Parse.TVar x, (Parse.TTerm (_, _) as t))"
      else [(x, t)]
   | (Parse.TSet _, Parse.TVector _) | (Parse.TVector _, Parse.TSet _) | (Parse.TTuple _, Parse.TVector _) | (Parse.TVector _, Parse.TTuple _) ->
      failwith "Not unifiable: Head symbol conflict"
-  | (Parse.TArrow (posl, input, output), Parse.TVector (posr, tc)) ->
+  | (Parse.TArrow (_posl, _input, _output), Parse.TVector (_posr, _tc)) ->
      failwith "Not unifiable: Parse.TArrow and Parse.TVector Head symbol conflict"
-  | (Parse.TVar (posl, x), (Parse.TVector (posr, _) as v))
-    | ((Parse.TVector (posl, _) as v), Parse.TVar (posr, x)) ->
+  | (Parse.TVar (_posl, x), (Parse.TVector (_posr, _) as v))
+    | ((Parse.TVector (_posl, _) as v), Parse.TVar (_posr, x)) ->
      if occurs x v
      then failwith "not unifiable: ciruclarity in (Parse.TVar x, (Parse.TVector (_, _) as t))"
      else [(x, v)]
-  | (Parse.TSet (posl, sc)
-    ,Parse.TArrow (posr, input, output)) ->
+  | (Parse.TSet (_posl, _sc)
+    ,Parse.TArrow (_posr, _input, _output)) ->
      failwith "Not unifiable: Parse.TArrow is not Head, symbol conflict"
-  | (Parse.TSet (posl, sc), Parse.TSet (posr, tc)) ->
+  | (Parse.TSet (_posl, sc), Parse.TSet (_posr, tc)) ->
      unify [(sc, tc)]
   | (Parse.TTuple _, Parse.TSet _) | (Parse.TSet _, Parse.TTuple _) ->
      failwith "Not unifiable: Head symbol conflict"
-  | (Parse.TArrow (posl, input, output)
-    ,Parse.TSet (posr, tc)) ->
+  | (Parse.TArrow (_posl, _input, _output)
+    ,Parse.TSet (_posr, _tc)) ->
      failwith "Not unifiable: Parse.TArrow and Parse.TSet Head symbol conflict"
-  | (Parse.TVar (pos_var, x)
+  | (Parse.TVar (_pos_var, x)
     ,Parse.TSet (pos_set, t))
     | (Parse.TSet (pos_set, t)
-      , Parse.TVar (pos_var, x)) ->
+      , Parse.TVar (_pos_var, x)) ->
      if occurs x (Parse.TSet (pos_set, t))
      then failwith "not unifiable: ciruclarity in (Parse.TVar x, (Parse.TSet (_, _) as t))"
      else [(x, (Parse.TSet (pos_set, t)))] (* is this correct?  *)
-  | (Parse.TTuple (posl, sc)
-    ,Parse.TArrow (posr, input, output)) ->
+  | (Parse.TTuple (_posl, _sc)
+    ,Parse.TArrow (_posr, _input, _output)) ->
      failwith "Not unifiable: Parse.TArrow is not Head, symbol conflict"
-  | (Parse.TTuple (posl, sc), Parse.TTuple (posr, tc)) ->
+  | (Parse.TTuple (_posl, sc), Parse.TTuple (_posr, tc)) ->
      if List.length sc = List.length tc
      then unify (List.combine sc tc)
      else failwith "Not unifiable: Head symbol conflict"
-  | (Parse.TArrow (posl, input, output), Parse.TTuple (posr, tc)) ->
+  | (Parse.TArrow (_posl, _input, _output), Parse.TTuple (_posr, _tc)) ->
      failwith "Not unifiable: Parse.TArrow and Parse.TTuple Head symbol conflict"
-  | (Parse.TVar (pos_var, x)
-    ,(Parse.TTuple (pos_tup, _) as t))
-    | ((Parse.TTuple (pos_tup, _) as t)
-      ,Parse.TVar (pos_var, x)) ->
+  | (Parse.TVar (_pos_var, x)
+    ,(Parse.TTuple (_pos_tup, _) as t))
+    | ((Parse.TTuple (_pos_tup, _) as t)
+      ,Parse.TVar (_pos_var, x)) ->
      if occurs x t
      then failwith "not unifiable: ciruclarity in (Parse.TVar x, (Parse.TTuple (_, _) as t))"
      else [(x, t)]
-  | (Parse.TArrow (posl, f_input, f_output), Parse.TArrow (posr, g_input, g_output)) ->
+  | (Parse.TArrow (_posl, f_input, f_output), Parse.TArrow (_posr, g_input, g_output)) ->
      unify (List.combine
               [f_input; f_output]
               [g_input; g_output])
-  | (Parse.TVar (pos_var, x), (Parse.TArrow (pos_arr, _, _) as t))
-    | ((Parse.TArrow (pos_arr, _,_) as t), Parse.TVar (pos_var, x)) ->
+  | (Parse.TVar (_pos_var, x), (Parse.TArrow (_pos_arr, _, _) as t))
+    | ((Parse.TArrow (_pos_arr, _,_) as t), Parse.TVar (_pos_var, x)) ->
      if occurs x t
      then failwith "not unifiable: ciruclarity in (Parse.TVar x, (Parse.TArrow (_, _) as t))"
      else [(x, t)]
@@ -219,8 +220,8 @@ It describes the typ that should be inserted in place of the id *)
   | (TDict (_, _, _),
      (TVar (_, _)|TTerm (_, _, _)|TArrow (_, _, _)|TUnit _|TString _|
       TTuple (_, _)|TVector (_, _)|TSet (_, _)|TU8 _)) -> failwith "COOL TDICT on the left"
-  | (TSym (pos, s), _) -> failwith "Symbol stuff not done"
-  | (_, TSym (pos, s)) -> failwith "Symbol stuff not done"
+  | (TSym (_pos, _s), _) -> failwith "Symbol stuff not done"
+  | (_, TSym (_pos, _s)) -> failwith "Symbol stuff not done"
 
 (* unify a list of pairs, i.e. equations *)
 and unify (equations : equation list) : substitution =
@@ -311,7 +312,7 @@ let infer (expr: Parse.expr): ((equation list * Parse.typ), string) result =
              :: (env, argument, input_type)
              :: rest_of_goals in
            infer_rec equations new_goals
-        | Parse.Lam (pos_lam, (PSym (pos_sym, x), body) :: rest) ->
+        | Parse.Lam (pos_lam, (PSym (_pos_sym, x), body) :: _rest) ->
            let input_type = gensym () in
            let output_type = gensym () in
            let new_env = (x, input_type) :: env in
@@ -321,27 +322,27 @@ let infer (expr: Parse.expr): ((equation list * Parse.typ), string) result =
                                             ,input_type
                                             ,output_type)) :: equations in
            infer_rec new_equations new_goals
-        | Parse.Lam (pos_lam, (Parse.PTag (pos_ptag, name, child), body) :: rest) ->
+        | Parse.Lam (_pos_lam, (Parse.PTag (_pos_ptag, _name, _child), _body) :: _rest) ->
            raise (InferError "lam with ptag not supported")
         | Parse.Lam (pos, []) -> failwith (Util.str ["A lambda binding nothing makes no sense...pos: "
                                                     ;Parse.string_of_position pos])
         | Parse.Unit pos ->
            let new_equations = (ty, Parse.TUnit pos) :: equations in
            infer_rec new_equations rest_of_goals
-        | Parse.U8 (pos, n) ->
+        | Parse.U8 (pos, _n) ->
            infer_rec ((ty, Parse.TU8 pos) :: equations) rest_of_goals
-        | Parse.String (pos, s) ->
+        | Parse.String (pos, _s) ->
            let new_equations = (ty, Parse.TString pos) :: equations in
            infer_rec new_equations rest_of_goals
-        | Parse.Tuple (pos, children) ->
+        | Parse.Tuple (_pos, _children) ->
            raise (InferError "Parse.Tuple not implemented")
-        | Parse.Vector (pos, children) ->
+        | Parse.Vector (_pos, _children) ->
            raise (InferError "Parse.Vector not implemented")
-        | Parse.Dict (pos, keys_and_vals) ->
+        | Parse.Dict (_pos, _keys_and_vals) ->
            raise (InferError "Parse.Dict not implemented")
-        | Parse.Set (pos, children) ->
+        | Parse.Set (_pos, _children) ->
            raise (InferError "Parse.Set not implemented")
-        | Parse.Ann (pos, given_typ, expr) ->
+        | Parse.Ann (_pos, _given_typ, _expr) ->
            raise (InferError "Parse.Ann not implemented")
        (* | Parse.TaggedExpr (pos_tag
         *                    ,tag_name

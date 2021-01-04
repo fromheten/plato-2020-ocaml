@@ -99,7 +99,9 @@ let generate_lambda generate lam_arg lam_body state =
       final_string
    | None -> final_string)
 
-let rec generate expression state =
+exception GenerateError of string
+
+let rec generate (expression: expr) (state: state ref): string =
   let code = ref "" in
   (match expression with
    | Lam (lam_arg, lam_body) ->
@@ -155,7 +157,7 @@ let rec generate expression state =
                        ; nt ; generate e1 state
                        ; ")"];
       !code
-   | Command _ -> failwith "A command should be applied")
+   | Command _ -> raise (GenerateError "A command should be applied"))
 
 let generate_program expression =
   let state = ref { lam_number = 0
