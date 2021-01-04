@@ -7,3 +7,4 @@ _build
 *.cmo
 *.o
 out/*
+.merlin # Dune generates these

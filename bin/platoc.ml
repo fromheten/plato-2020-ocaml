@@ -1,7 +1,7 @@
 (* This is the main entrypoint of the Plato compiler *)
 
-let rec codegen_expr: (Parse.expr -> (Codegen.expr, string) result) = function
-  | Parse.Lam (_pos
+let rec codegen_expr: (Parser.expr -> (Codegen.expr, string) result) = function
+  | Parser.Lam (_pos
               ,(PSym (_pos_psym
                      ,arg)
                ,expr)
@@ -12,7 +12,7 @@ let rec codegen_expr: (Parse.expr -> (Codegen.expr, string) result) = function
       | Error e ->
          Error (Util.str [ "codegen_expr error: "
                          ; e]))
-  | Parse.App (_pos_app
+  | Parser.App (_pos_app
               ,e0
               ,e1) ->
      (match (codegen_expr e0, codegen_expr e1) with
@@ -33,11 +33,11 @@ let rec codegen_expr: (Parse.expr -> (Codegen.expr, string) result) = function
                          ;error1
                          ;")"
      ]))
-  | Parse.Sym (_pos, s) ->
+  | Parser.Sym (_pos, s) ->
      Ok (Codegen.Sym s)
-  | Parse.String (_pos, s) ->
+  | Parser.String (_pos, s) ->
      Ok (Codegen.String s)
-  | Parse.U8 (_pos, n) ->
+  | Parser.U8 (_pos, n) ->
      Ok (Codegen.Integer n)
   | _ -> failwith "can't convert this to codegen expression"
 
@@ -59,8 +59,8 @@ Here is an example: `(Log your-program)`.
 cmdise can only handle programs that begin with applying Log"
 
 let compile (src: string) =
-  match Parse.expression (0
-                         ,(Parse.char_list src)) with
+  match Parser.expression (0
+                         ,(Parser.char_list src)) with
   | Ok (_rest, expr) ->
      (match Unify.infer_and_unify expr with
       | Ok _typ -> (match codegen_expr expr with
@@ -118,22 +118,22 @@ let test test_msg_pairs =
 
 let print_tests_results =
   List.concat
-    [ Parse.literal_tests
-    ; Parse.quoted_symbol_test
-    ; Parse.strip_starting_spaces_tests
-    ; Parse.n_or_more_tests
-    ; Parse.lambda_tests
-    ; Parse.symbol_tests
-    ; Parse.set_tests
-    ; Parse.vector_tests
-    ; Parse.expression_tests
-    ; Parse.tunit_tests
-    ; Parse.typ_tests
-    ; Parse.string_tests
+    [ Parser.literal_tests
+    ; Parser.quoted_symbol_test
+    ; Parser.strip_starting_spaces_tests
+    ; Parser.n_or_more_tests
+    ; Parser.lambda_tests
+    ; Parser.symbol_tests
+    ; Parser.set_tests
+    ; Parser.vector_tests
+    ; Parser.expression_tests
+    ; Parser.tunit_tests
+    ; Parser.typ_tests
+    ; Parser.string_tests
     ; Codegen.ocaml_import_tests
     ; compile_tests
     ; Unify.unify_tests
-    ; Parse.string_of_expr_tests
+    ; Parser.string_of_expr_tests
     ; Unify.infer_tests]
   |> test
 
@@ -143,13 +143,13 @@ let () =
   print_string (Util.str ["platoc version: "
                          ;version]);
   print_newline ();
-  match Parse.parse_args (0
-                         ,(Parse.char_list
+  match Parser.parse_args (0
+                         ,(Parser.char_list
                              (String.concat
                                 " "
                                 (Array.to_list
                                    Sys.argv)))) with
-  | Ok (_rest, Parse.PrintHelp _) ->
+  | Ok (_rest, Parser.PrintHelp _) ->
      print_string "Thanks for trying Plato!
 
                    Syntax: $ platoc <options> <input-files.plato>
@@ -158,12 +158,12 @@ let () =
                    * `-o` or `--output`: output a machine runnable program, e.g. `platoc -o /path/to/executeable myprogram.plato`
                    * `-oc` or `--output-c`: Generate C code from your Plato program into a file, e.g. `platoc -oc /path/to/c_source.c myprogram.plato`
                    "
-  | Ok (_rest, Parse.ShowPrintTests _) ->
+  | Ok (_rest, Parser.ShowPrintTests _) ->
      print_tests_results
      |> print_string
      |> print_newline
      |> print_newline
-  | Ok (_rest, Parse.OutputExeToPath (_pos, io_paths)) ->
+  | Ok (_rest, Parser.OutputExeToPath (_pos, io_paths)) ->
      print_string "Compiling Plato to C...";
      let src = Util.str (List.map
                            Codegen.read_whole_file
@@ -193,7 +193,7 @@ let () =
          print_string (Util.str [ "Compilation Error: "
                                 ; e]);
          print_newline ())
-  | Ok (_rest, Parse.OutputCToPath (_pos, io_paths)) ->
+  | Ok (_rest, Parser.OutputCToPath (_pos, io_paths)) ->
      let src = Util.str (List.map
                            Codegen.read_whole_file
                            io_paths.input_files) in

@@ -4,16 +4,18 @@ Compiler taking Plato files outputting C code.
 
 ## Compilation
 
-Compilation is dependent upon `ocamlopt`, `make`, `cc`. It uses no libraries but the OCaml standard library. Examples below written in `bash`. I've compiled it on MacOS 10.15.3. Please write me if you compile it on other systems, or have problems compiling it. It should be easy!
+Plato is built with Dune.
 
-`$ make out/platoc`
+To compile it, run `$ dune build bin/platoc.exe`
+
+To run a toplevel/repl, run `$ dune utop .`
+
+To run a toplevel in Emacs/Tuareg mode, you want `C-c C-b dune utop . -- -emacs`
 
 ## Usage
 
-* Print tests `$ ./out/platoc --test-results`
-* Compile and run a program `$ ./out/platoc -o ./out/main.c (Log "Hello") && cc -o ./out/a.out && ./out/a.out`
-
-`$ make out/platoc`
+* Print tests `$ dune exec bin/platoc.exe --test-results`
+* Compile and run a program `$ dune exec bin/platoc.exe -o ./out/main.c (Log "Hello") && cc -o ./out/a.out && ./out/a.out`
 
 ## TODO
 
