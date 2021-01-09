@@ -244,18 +244,18 @@ let unify_tests =
   [("Unify: Infer"
    , apply (unify [v 1, (Read.TTuple (negpos, [(v 5); (v 4)]))
                   ;v 5, Read.TVector (negpos, (v 7))
-													     ;v 4, Read.TSet (negpos, Read.TU8 negpos)
-													     ;v 6, Read.TU8 negpos
-															   ;v 7, Read.TU8 negpos
-													     ;v 6, v 3
-															   ;v 7, v 3
-													     ;v 2, Read.TArrow (negpos, v 1, v 3)])
+		  ;v 4, Read.TSet (negpos, Read.TU8 negpos)
+		  ;v 6, Read.TU8 negpos
+		  ;v 7, Read.TU8 negpos
+		  ;v 6, v 3
+		  ;v 7, v 3
+		  ;v 2, Read.TArrow (negpos, v 1, v 3)])
        (v 2)
      = Read.TArrow
          (negpos,
           Read.TTuple (negpos
-                       ,[Read.TVector (negpos, Read.TU8 negpos)
-                        ;Read.TSet (negpos, Read.TU8 negpos)])
+                      ,[Read.TVector (negpos, Read.TU8 negpos)
+                       ;Read.TSet (negpos, Read.TU8 negpos)])
           ,Read.TU8 negpos))
   ;("Unify: Infer unit"
    , apply (unify [v 1, v 2
@@ -271,7 +271,10 @@ let string_of_equation = function
      ^ " = "
      ^ string_of_typ ty2
 
-type env = (string * Read.typ) list
+type env_key =
+  | EInt of int
+  | EStr of string
+type env = (env_key * Read.typ) list
 
 let empty_env = []
 
@@ -293,7 +296,7 @@ let infer (expr: Read.expr): ((equation list * Read.typ), string) result =
     | (env, expr, ty) :: rest_of_goals ->
        (match expr with
         | Read.Sym (pos_sym, x) ->
-           (match List.assoc_opt x env with
+           (match List.assoc_opt (EStr x) env with
             | Some x_from_env ->
                let new_equations = (x_from_env, ty) :: equations in
                infer_rec new_equations rest_of_goals
@@ -315,7 +318,7 @@ let infer (expr: Read.expr): ((equation list * Read.typ), string) result =
         | Read.Lam (pos_lam, (PSym (_pos_sym, x), body) :: _rest) ->
            let input_type = gensym () in
            let output_type = gensym () in
-           let new_env = (x, input_type) :: env in
+           let new_env = ((EStr x), input_type) :: env in
            let new_goals = (new_env, body, output_type) :: rest_of_goals in
            let new_equations = (ty
                                ,Read.TArrow(pos_lam
@@ -334,8 +337,27 @@ let infer (expr: Read.expr): ((equation list * Read.typ), string) result =
         | Read.String (pos, _s) ->
            let new_equations = (ty, Read.TString pos) :: equations in
            infer_rec new_equations rest_of_goals
-        | Read.Tuple (_pos, _children) ->
-           raise (InferError "Read.Tuple not implemented")
+        | Read.Tuple (pos, children) ->
+           (* For each child, create a new TSym *)
+           (* For each `(child, child_tsym)`, create a goal
+              that says (env, child, child_tsym)
+              Also create a new equation saying `(ty, Read.TTuple (pos, child_tsyms))`
+*)
+           let childrens_tsyms: Read.typ list =
+             List.map (fun _ -> gensym ()) children in
+           (* Current type `ty` is a <childrens_tsyms> i.e. a tuple *)
+           let new_equations =
+             (ty, Read.TTuple (pos, childrens_tsyms)) :: equations in
+           let child_goal child child_tsym =
+             env,
+             child,
+             child_tsym in
+           let new_goals = List.concat
+                             [(List.map
+                                 (fun (c, t) -> child_goal c t)
+                                 (List.combine children childrens_tsyms))
+                             ;rest_of_goals] in
+           infer_rec new_equations new_goals
         | Read.Vector (_pos, _children) ->
            raise (InferError "Read.Vector not implemented")
         | Read.Dict (_pos, _keys_and_vals) ->
@@ -418,12 +440,28 @@ let infer_tests =
                         ,Read.TArrow (negpos
                                   ,Read.TVar (negpos, 3)
                                   ,Read.TVar (negpos, 4)))))
-  ; ("Type of Tuple",
+  ; ("Type of <1 1>",
      (__gensym_state__ := -1;
       infer_and_unify (Read.Tuple (negpos
                                    ,[(Read.U8 (negpos, 1))
                                     ;(Read.U8 (negpos, 1))]))
       = Ok (Read.TTuple (negpos, [(TU8 negpos); (TU8 negpos)]))) )
+  ; ("Type of <<1 1> <1 1>>",
+     (__gensym_state__ := -1;
+      infer_and_unify (Read.Tuple (negpos
+                                   ,[(Read.Tuple (negpos
+                                                 ,[(Read.U8 (negpos, 1))
+                                                  ;(Read.U8 (negpos, 1))]))
+                                    ;(Read.Tuple (negpos
+                                                 ,[(Read.U8 (negpos, 1))
+                                                  ;(Read.U8 (negpos, 1))]))]))
+      = Ok (Read.TTuple (negpos,
+                         [Read.TTuple (negpos,
+                                       [(TU8 negpos);
+                                        (TU8 negpos)]);
+                          Read.TTuple (negpos,
+                                       [(TU8 negpos);
+                                        (TU8 negpos)])]))) )
   ; ("Type of Dict"
     ,(__gensym_state__ := -1;
       infer_and_unify (Read.Dict (negpos
