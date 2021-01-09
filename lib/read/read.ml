@@ -1079,6 +1079,7 @@ type compiler_cmd =
   | OutputCToPath of position * io_paths
   | OutputExeToPath of position * io_paths
   | PrintHelp of position
+  | PublishAndPrintIDFromSTDIN of position
 
 let parse_arg_test_results source =
   (map
@@ -1132,13 +1133,21 @@ let parse_output_c source =
 
 let print_help (source: source) =
   (map (orElse_list [(literal "--help")
-                    ;(literal "-h")
-                    ;(literal "")])
+                    ;(literal "-h")])
      (function
       | Ok ((index, rest), ()) ->
          Ok ((index, rest)
             ,PrintHelp (fst source, index))
       | Error e -> Error e))
+    source
+
+let parse_publish (source: source) =
+  map
+    (literal "--publish")
+    (function
+     | Ok ((index, rest), ()) ->
+        Ok ((index, rest), PublishAndPrintIDFromSTDIN (fst source, index))
+     | Error e -> Error e)
     source
 
 let parse_args =
@@ -1148,6 +1157,7 @@ let parse_args =
         (orElse_list [parse_arg_test_results
                      ;parse_output_c
                      ;parse_output_exe
+                     ;parse_publish
                      ;print_help]))
      (Util.take_ok
         (fun ((end_pos, rest), (_, cmd)) ->

@@ -1,7 +1,7 @@
 (* This is the main entrypoint of the Plato compiler *)
 
-let rec codegen_expr: (Parser.expr -> (Codegen.expr, string) result) = function
-  | Parser.Lam (_pos
+let rec codegen_expr: (Read.expr -> (Codegen.expr, string) result) = function
+  | Read.Lam (_pos
               ,(PSym (_pos_psym
                      ,arg)
                ,expr)
@@ -12,7 +12,7 @@ let rec codegen_expr: (Parser.expr -> (Codegen.expr, string) result) = function
       | Error e ->
          Error (Util.str [ "codegen_expr error: "
                          ; e]))
-  | Parser.App (_pos_app
+  | Read.App (_pos_app
               ,e0
               ,e1) ->
      (match (codegen_expr e0, codegen_expr e1) with
@@ -33,11 +33,11 @@ let rec codegen_expr: (Parser.expr -> (Codegen.expr, string) result) = function
                          ;error1
                          ;")"
      ]))
-  | Parser.Sym (_pos, s) ->
+  | Read.Sym (_pos, s) ->
      Ok (Codegen.Sym s)
-  | Parser.String (_pos, s) ->
+  | Read.String (_pos, s) ->
      Ok (Codegen.String s)
-  | Parser.U8 (_pos, n) ->
+  | Read.U8 (_pos, n) ->
      Ok (Codegen.Integer n)
   | _ -> failwith "can't convert this to codegen expression"
 
@@ -59,8 +59,8 @@ Here is an example: `(Log your-program)`.
 cmdise can only handle programs that begin with applying Log"
 
 let compile (src: string) =
-  match Parser.expression (0
-                         ,(Parser.char_list src)) with
+  match Read.expression (0
+                         ,(Read.char_list src)) with
   | Ok (_rest, expr) ->
      (match Unify.infer_and_unify expr with
       | Ok _typ -> (match codegen_expr expr with
@@ -74,12 +74,9 @@ let compile (src: string) =
                       Error (Util.str ["inner fail: "
                                       ;inner_err]))
       | Error e -> failwith e)
-
-
   | Error e ->
      Error (Util.str ["`Platoc.compile` Error: e: "
                      ;e])
-
 
 let compile_tests =
   [((Util.str ["compile"])
@@ -118,22 +115,22 @@ let test test_msg_pairs =
 
 let print_tests_results =
   List.concat
-    [ Parser.literal_tests
-    ; Parser.quoted_symbol_test
-    ; Parser.strip_starting_spaces_tests
-    ; Parser.n_or_more_tests
-    ; Parser.lambda_tests
-    ; Parser.symbol_tests
-    ; Parser.set_tests
-    ; Parser.vector_tests
-    ; Parser.expression_tests
-    ; Parser.tunit_tests
-    ; Parser.typ_tests
-    ; Parser.string_tests
+    [ Read.literal_tests
+    ; Read.quoted_symbol_test
+    ; Read.strip_starting_spaces_tests
+    ; Read.n_or_more_tests
+    ; Read.lambda_tests
+    ; Read.symbol_tests
+    ; Read.set_tests
+    ; Read.vector_tests
+    ; Read.expression_tests
+    ; Read.tunit_tests
+    ; Read.typ_tests
+    ; Read.string_tests
     ; Codegen.ocaml_import_tests
     ; compile_tests
     ; Unify.unify_tests
-    ; Parser.string_of_expr_tests
+    ; Read.string_of_expr_tests
     ; Unify.infer_tests]
   |> test
 
@@ -143,13 +140,13 @@ let () =
   print_string (Util.str ["platoc version: "
                          ;version]);
   print_newline ();
-  match Parser.parse_args (0
-                         ,(Parser.char_list
+  match Read.parse_args (0
+                         ,(Read.char_list
                              (String.concat
                                 " "
                                 (Array.to_list
                                    Sys.argv)))) with
-  | Ok (_rest, Parser.PrintHelp _) ->
+  | Ok (_rest, Read.PrintHelp _) ->
      print_string "Thanks for trying Plato!
 
                    Syntax: $ platoc <options> <input-files.plato>
@@ -157,13 +154,14 @@ let () =
                    Options:
                    * `-o` or `--output`: output a machine runnable program, e.g. `platoc -o /path/to/executeable myprogram.plato`
                    * `-oc` or `--output-c`: Generate C code from your Plato program into a file, e.g. `platoc -oc /path/to/c_source.c myprogram.plato`
+                   * `--publish` publishes from stdin and prints the hash ID to stdout
                    "
-  | Ok (_rest, Parser.ShowPrintTests _) ->
+  | Ok (_rest, Read.ShowPrintTests _) ->
      print_tests_results
      |> print_string
      |> print_newline
      |> print_newline
-  | Ok (_rest, Parser.OutputExeToPath (_pos, io_paths)) ->
+  | Ok (_rest, Read.OutputExeToPath (_pos, io_paths)) ->
      print_string "Compiling Plato to C...";
      let src = Util.str (List.map
                            Codegen.read_whole_file
@@ -193,7 +191,7 @@ let () =
          print_string (Util.str [ "Compilation Error: "
                                 ; e]);
          print_newline ())
-  | Ok (_rest, Parser.OutputCToPath (_pos, io_paths)) ->
+  | Ok (_rest, Read.OutputCToPath (_pos, io_paths)) ->
      let src = Util.str (List.map
                            Codegen.read_whole_file
                            io_paths.input_files) in
@@ -206,6 +204,13 @@ let () =
       | Error e ->
          print_string (Util.str [ "Compilation Error: "
                                 ; e]))
+  | Ok (_, PublishAndPrintIDFromSTDIN (_pos)) ->
+     (* print_string (Cryptokit.hash_channel (Cryptokit.Hash.sha3 512) Stdlib.stdin); *)
+     let binary_hash = (Cryptokit.hash_string (Cryptokit.Hash.sha3 512) "Hello") in
+     failwith binary_hash
+     (* let hash_id = Platoid.base64_encode (Read.char_list binary_hash) in
+      * print_string hash_id;
+      * print_newline (); *)
   | Error e ->
      Printf.fprintf stderr "%s\n" ( Util.str [ "Argument parsing error: given argument is: "
                                              ; String.concat " " (Array.to_list Sys.argv)]);

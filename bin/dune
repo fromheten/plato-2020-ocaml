@@ -1,6 +1,7 @@
 (executable
  (name platoc)
- (libraries parser
+ (libraries read
             util
             unify
-            codegen))
+            codegen
+            cryptokit))

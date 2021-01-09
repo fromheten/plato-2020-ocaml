@@ -6,6 +6,8 @@ Compiler taking Plato files outputting C code.
 
 Plato is built with Dune.
 
+Get all dependencies: `$ opam install --deps-only .`
+
 To compile it, run `$ dune build bin/platoc.exe`
 
 To run a toplevel/repl, run `$ dune utop .`
