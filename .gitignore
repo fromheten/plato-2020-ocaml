@@ -7,4 +7,6 @@ _build
 *.cmo
 *.o
 out/*
-**/.merlin # Dune generates these
+*.merlin
+*.diff.md
+*.md.corrected
