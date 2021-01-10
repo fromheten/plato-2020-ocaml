@@ -36,3 +36,5 @@ let flip f x y = f y x
 let equals x y = x = y
 
 let neg f boolean = (not (f boolean))
+
+let xyyx f x y = f y x

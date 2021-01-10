@@ -108,9 +108,13 @@ let test test_msg_pairs =
   test_msg_pairs
   |> List.map (fun (msg, test) ->
          if test
-         then Util.str ["OK: "; msg]
+         then Util.str [(* "OK: "; msg *)]
          else Util.str ["Error: "; msg])
   |> List.filter (fun s -> String.length s > 0)
+  |> (fun testcases ->
+    testcases
+    |> List.cons (Util.str ["Failing tests: "
+                           ;string_of_int (List.length testcases)]))
   |> String.concat "\n"
 
 let print_tests_results =

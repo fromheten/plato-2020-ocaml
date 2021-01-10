@@ -45,26 +45,37 @@ let rec occurs (v : Read.id) (t : Read.typ) : bool =
   | Read.TString _pos -> false
 
 (* substitute Read.typ s for all occurrences of variable v in Read.typ t *)
-let rec subst (s : Read.typ) (v : Read.id) (t : Read.typ) : Read.typ =
-  match t with
-  | Read.TVar (_pos, y) ->
-     if v = y
-     then s
-     else t
+(* TVars get replaced, while concrete types are returned,
+   with child types further investigated *)
+(* Make the type concrete - replace as many variables as possible *)
+let rec subst
+          (value : Read.typ)
+          (var : Read.id)
+          (src_typ : Read.typ)
+        : Read.typ =
+  match src_typ with
+  | Read.TVar (_pos, tvar) ->
+     if var = tvar
+     then value
+     else src_typ
   | Read.TSym (_pos, _y) ->
      failwith "Yeah this ain't gonna happen"
   | Read.TTerm (pos, f, u) ->
-     Read.TTerm (pos, f, List.map (subst s v) u)
-  | Read.TVector (_pos, u) ->
-     Read.TVector (_pos, subst s v u)
-  | Read.TSet (_pos, u) ->
-     Read.TSet (_pos, subst s v u)
-  | Read.TDict (_pos, _key_typ, _value_typ) ->
-     failwith "subst for TDict - I do not yet understand this"
-  | Read.TTuple (_pos, u) ->
-     Read.TTuple (_pos, List.map (subst s v) u)
+     Read.TTerm (pos, f, List.map (subst value var) u)
+  | Read.TVector (_pos, xs) ->
+     Read.TVector (_pos, subst value var xs)
+  | Read.TSet (_pos, xs) ->
+     Read.TSet (_pos, subst value var xs)
+  | Read.TDict (_pos, key_typ, val_typ) ->
+     Read.TDict (_pos,
+                 subst value var key_typ,
+                 subst value var val_typ)
+  | Read.TTuple (_pos, tuple_childs) ->
+     Read.TTuple (_pos, List.map
+                          (subst value var)
+                          tuple_childs)
   | Read.TArrow (_pos, input, output) ->
-     Read.TArrow (_pos, subst s v input, (subst s v output))
+     Read.TArrow (_pos, subst value var input, (subst value var output))
   | Read.TUnit _pos -> Read.TUnit _pos
   | Read.TU8 _pos -> Read.TU8 _pos
   | Read.TString _pos -> Read.TString _pos
@@ -76,7 +87,7 @@ let apply (s : substitution) (t : Read.typ) : Read.typ =
 (* unify one pair  *)
 let rec unify_one (s : Read.typ) (t : Read.typ) : substitution =
   (* a substitution is a list of id * typ
-It describes the typ that should be inserted in place of the id *)
+     It describes the typ that should be inserted in place of the id *)
   match (s, t) with
   | (Read.TVar (_posl, x), Read.TVar (_posr, y)) ->
      if x = y
@@ -216,7 +227,16 @@ It describes the typ that should be inserted in place of the id *)
      if occurs x t
      then failwith "not unifiable: ciruclarity in (Read.TVar x, (Read.TArrow (_, _) as t))"
      else [(x, t)]
-  | (_, Read.TDict _) -> failwith "COOL TDICT on the right"
+  | (TVar (_tvar_pos, x), Read.TDict (_tdict_pos, k, v) ) -> (* TODO pattern should prolly match if the order is reversed as well *)
+     if occurs x k || occurs x v
+     then failwith "not unifiable: circularity in (TVar (_tvar_pos, x), Read.TDict _ as d)"
+     else [(x, t)]
+  | (left, Read.TDict _) ->
+     failwith
+       (Util.str
+          ["COOL TDICT on the right"
+          ;Read.string_of_char_list
+             (Read.string_of_typ left)])
   | (TDict (_, _, _),
      (TVar (_, _)|TTerm (_, _, _)|TArrow (_, _, _)|TUnit _|TString _|
       TTuple (_, _)|TVector (_, _)|TSet (_, _)|TU8 _)) -> failwith "COOL TDICT on the left"
@@ -360,10 +380,34 @@ let infer (expr: Read.expr): ((equation list * Read.typ), string) result =
            infer_rec new_equations new_goals
         | Read.Vector (_pos, _children) ->
            raise (InferError "Read.Vector not implemented")
-        | Read.Dict (_pos, _keys_and_vals) ->
-           raise (InferError "Read.Dict not implemented")
-        | Read.Set (_pos, _children) ->
-           raise (InferError "Read.Set not implemented")
+        | Read.Dict (pos, keys_and_vals) ->
+           (* I know `ty` is a Dict *)
+           let key_typ = gensym () in
+           let val_typ = gensym () in
+           let new_equations =
+             (ty, Read.TDict (pos, key_typ, val_typ)) :: equations in
+           let new_goal value value_typ = (env, value, value_typ) in
+           let keys = List.map fst keys_and_vals in
+           let vals = List.map snd keys_and_vals in
+           let new_goals_vals =
+             List.concat
+               [List.map (Util.xyyx new_goal val_typ) vals
+               ;rest_of_goals] in
+           let new_goals_keys =
+             List.concat
+               [List.map (Util.xyyx new_goal key_typ) keys
+               ;new_goals_vals] in
+           infer_rec new_equations new_goals_keys
+        | Read.Set (pos, children) ->
+           let children_typ = gensym () in
+           let new_equations =
+             (ty, Read.TSet (pos, children_typ)) :: equations in
+           let new_goal child child_typ =
+             (env, child, child_typ) in
+           let new_goals = List.concat
+                             [List.map (Util.xyyx new_goal children_typ) children
+                             ;rest_of_goals] in
+           infer_rec new_equations new_goals
         | Read.Ann (_pos, _given_typ, _expr) ->
            raise (InferError "Read.Ann not implemented")
        (* | Read.TaggedExpr (pos_tag
@@ -466,12 +510,18 @@ let infer_tests =
     ,(__gensym_state__ := -1;
       infer_and_unify (Read.Dict (negpos
                                   ,[Read.U8 (negpos, 1)
-                                   ,Read.Lam (negpos, [PSym (negpos, "x"), Sym (negpos, "x")])]))
+                                   ,Read.Lam (negpos,
+                                              [PSym (negpos, "x"),
+                                               Sym (negpos, "x")])
+                                   ;Read.U8 (negpos, 2)
+                                   ,Read.Lam (negpos,
+                                              [PSym (negpos, "y"),
+                                               Sym (negpos, "y")])]))
       = Ok (Read.TDict (negpos
-                        ,TU8 negpos
-                        ,TArrow (negpos
-                            ,TU8 negpos
-                            ,TU8 negpos)))))
+                        ,Read.TU8 negpos
+                        ,Read.TArrow (negpos
+                                     ,Read.TVar (negpos, 5)
+                                     ,Read.TVar (negpos, 5))))))
    (* ;("match a union"
     *  , (__gensym_state__ := -1;
     *     infer_and_unify (Read.Match ((0, 83)
