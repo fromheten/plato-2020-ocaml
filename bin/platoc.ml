@@ -140,6 +140,20 @@ let print_tests_results =
 
 let version = "0.0.0.0.0.1"
 
+let help_string = "Syntax: $ platoc <options> <input-files.plato>
+
+                   Options:
+                   * `-o` or `--output`: output a machine runnable program, e.g. `platoc -o /path/to/executeable myprogram.plato`
+                   * `-oc` or `--output-c`: Generate C code from your Plato program into a file, e.g. `platoc -oc /path/to/c_source.c myprogram.plato`
+                   * `--run <source file>`: Compile a file containing plato source code and run the resulting program
+                   * `--publish` publishes from stdin and prints the hash ID to stdout
+                   "
+
+let welcome_text =
+  String.concat "\n" ["# Welcome to the Plato platform."
+                     ;"I hope you enjoy it!\n"
+                     ;help_string]
+
 let () =
   print_string (Util.str ["platoc version: "
                          ;version]);
@@ -151,15 +165,7 @@ let () =
                                 (Array.to_list
                                    Sys.argv)))) with
   | Ok (_rest, Read.PrintHelp _) ->
-     print_string "Thanks for trying Plato!
-
-                   Syntax: $ platoc <options> <input-files.plato>
-
-                   Options:
-                   * `-o` or `--output`: output a machine runnable program, e.g. `platoc -o /path/to/executeable myprogram.plato`
-                   * `-oc` or `--output-c`: Generate C code from your Plato program into a file, e.g. `platoc -oc /path/to/c_source.c myprogram.plato`
-                   * `--publish` publishes from stdin and prints the hash ID to stdout
-                   "
+     print_string help_string
   | Ok (_rest, Read.ShowPrintTests _) ->
      print_tests_results
      |> print_string
@@ -208,6 +214,26 @@ let () =
       | Error e ->
          print_string (Util.str [ "Compilation Error: "
                                 ; e]))
+  | Ok(_, Run (_pos, src_path)) ->
+     let src = (Codegen.read_whole_file src_path) in
+     let out_path = "/tmp/plato_run_temp" in
+     let c_out_path = String.concat "" [out_path; ".c"] in
+     (match compile src with
+      | Ok c_source ->
+         (* Write message to file *)
+         let oc = open_out c_out_path in
+         Printf.fprintf oc "%s\n" c_source;
+         close_out oc;
+      | Error e ->
+         print_string (Util.str [ "Compilation Error: "
+                                ; e]));
+     let status_code = Sys.command (String.concat "" ["cc -o "
+                                                     ;out_path
+                                                     ;" "
+                                                     ;c_out_path
+                                                     ;" && rm " ;c_out_path
+                                                     ;" && /tmp/plato_run_temp"]) in
+     exit status_code;
   | Ok (_, PublishAndPrintIDFromSTDIN (_pos)) ->
      (* print_string (Cryptokit.hash_channel (Cryptokit.Hash.sha3 512) Stdlib.stdin); *)
      let binary_hash = (Cryptokit.hash_string (Cryptokit.Hash.sha3 512) "Hello") in
@@ -215,6 +241,8 @@ let () =
      (* let hash_id = Platoid.base64_encode (Read.char_list binary_hash) in
       * print_string hash_id;
       * print_newline (); *)
+  | Ok (_, Read.NoCommandArguments (_pos)) ->
+     print_string welcome_text
   | Error e ->
      Printf.fprintf stderr "%s\n" ( Util.str [ "Argument parsing error: given argument is: "
                                              ; String.concat " " (Array.to_list Sys.argv)]);

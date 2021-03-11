@@ -1080,6 +1080,8 @@ type compiler_cmd =
   | OutputExeToPath of position * io_paths
   | PrintHelp of position
   | PublishAndPrintIDFromSTDIN of position
+  | NoCommandArguments of position
+  | Run of position * string
 
 let parse_arg_test_results source =
   (map
@@ -1088,6 +1090,15 @@ let parse_arg_test_results source =
           ((end_pos, rest)
           ,ShowPrintTests (fst source, end_pos)))))
     source
+
+let parse_arg_run source =
+  (map (andThen
+          (literal "--run")
+          symbol_native_string)
+     (Util.take_ok (fun ((end_pos, rest), ((), src_path)) ->
+          ((end_pos, rest)
+          ,Run ((fst source, end_pos), src_path)))))
+  source
 
 let parse_output_exe source =
   (map
@@ -1141,6 +1152,15 @@ let print_help (source: source) =
       | Error e -> Error e))
     source
 
+let print_welcome source =
+  (map (literal "")
+     (function
+      | Ok ((index, rest), ()) ->
+         Ok ((index, rest)
+            ,NoCommandArguments (fst source, index))
+      | Error e -> Error e))
+    source
+
 let parse_publish (source: source) =
   map
     (literal "--publish")
@@ -1158,7 +1178,9 @@ let parse_args =
                      ;parse_output_c
                      ;parse_output_exe
                      ;parse_publish
-                     ;print_help]))
+                     ;parse_arg_run
+                     ;print_help
+                     ;print_welcome]))
      (Util.take_ok
         (fun ((end_pos, rest), (_, cmd)) ->
           ((end_pos, rest), cmd))))
