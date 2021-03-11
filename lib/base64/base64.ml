@@ -11,7 +11,7 @@ let char_list string =
 let b64_alphabet = char_list "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
 (* function mapping encoded char to decoded char *)
-(* TODO make me a table, this is inefficient as shieeeet *)
+(* TODO make me a table, this is inefficient *)
 let char_from_b64char_opt b64char: int option =
   let rec inner b64char alphabet index =
     match alphabet with
@@ -38,7 +38,7 @@ let default opt default_val = match opt with
 let encodeblock (input: char list) (len: int) =
   (unwrap
      (List.nth_opt b64_alphabet
-        ((land)                 (* TODO double check that this is fine without this dumb land *)
+        ((land)
            ((lsr)
               (Char.code (unwrap
                             (List.nth_opt input 0)
