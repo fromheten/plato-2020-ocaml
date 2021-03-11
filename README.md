@@ -19,6 +19,10 @@ To run a toplevel in Emacs/Tuareg mode, you want `C-c C-b dune utop . -- -emacs`
 * Print tests `$ dune exec bin/platoc.exe --test-results`
 * Compile and run a program `$ dune exec bin/platoc.exe -o ./out/main.c (Log "Hello") && cc -o ./out/a.out && ./out/a.out`
 
+## Installation
+
+Install the Plato platform by running `export PREFIX=/my/install/path && make install`.
+
 ## TODO
 
 * Structs
@@ -33,10 +37,11 @@ To run a toplevel in Emacs/Tuareg mode, you want `C-c C-b dune utop . -- -emacs`
 * Type checking
 * C code generation
 * Hammock time
+* Base64 implementation
 
 ## Licence
 
-This is a labour of love. It flows from the axiom "cogito, ergo sum" - "cognition, thus existence". There is (at least) one existence, and it has one name. In the world of computation, we can like Adam ascribe a name to every piece of computation and information. Therefore, the hash is the true name of any data.
+"Cogito, ergo sum" - "cognition, thus existence" is a true axiom. The existence of universal truth follows from it. Man named all the animals, the birds of the air, and the living creatures of the field, but in the information age, there are just too many things to name, and names are not shared. So here is a system of pure functions with eternal references made of hashes that are not bound by time or space.
 
 ![Is such a thing even possible? History Channel Alien Guy](/docs/issuchathingevenpossible.gif)
 
