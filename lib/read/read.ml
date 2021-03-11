@@ -369,13 +369,13 @@ let n_or_more
       (total_n: int)
       (parse: 'source_code -> 'a parseresult)
     : 'source_code -> ('a list) parseresult =
-  let rec inner n acc s =
-    match parse s with
-    | Ok (rest, res) ->
-       inner (n + 1) (res :: acc) rest
+  let rec inner n acc source =
+    match parse source with
+    | Ok (src_rest, res) ->
+       inner (n + 1) (res :: acc) src_rest
     | Error e ->
        if n >= total_n
-       then Ok (s, List.rev acc)
+       then Ok (source, List.rev acc)
        else Error e
   in inner 0 []
 
@@ -385,14 +385,14 @@ let n_or_more_tests =
        4
        (literal "a")
        (0
-       ,(char_list "   aaaaaa "))
+       ,(char_list "   aabaaaa "))
      = Ok ((9, [' '])
-										,[(); (); (); (); (); ()]))
-     (* ;("andThen literals"
-      *     ,(andThen (literal "(")
-      *         (literal "λ")) (char_list " (λ x x)")
-      *      =
-   * ) *)]
+	  ,[(); (); (); (); (); ()]))
+   (* ;("andThen literals"
+    *     ,(andThen (literal "(")
+    *         (literal "λ")) (char_list " (λ x x)")
+    *      =
+    * ) *)]
 
 let orElse p0 p1 (source: source) =
   match p0 source with
@@ -420,7 +420,7 @@ let rec orElse_list ps src =
 let vector
       (expression: source -> expr parseresult)
       (source: source)
-    :expr parseresult =
+    : expr parseresult =
   (map
      (right (left (andThen
                      (andThen
