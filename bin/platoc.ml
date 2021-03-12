@@ -31,14 +31,24 @@ let rec codegen_expr: (Read.expr -> (Codegen.expr, string) result) = function
                          ;error0
                          ;")error1 = ("
                          ;error1
-                         ;")"
-     ]))
+                         ;")"]))
   | Read.Sym (_pos, s) ->
      Ok (Codegen.Sym s)
   | Read.String (_pos, s) ->
      Ok (Codegen.String s)
   | Read.U8 (_pos, n) ->
      Ok (Codegen.Integer n)
+  | Read.Tuple (_pos, children) ->
+     let codegenned_children =
+       (Util.list_result_of_result_list
+          (List.map codegen_expr children)) in
+     (match codegenned_children with
+     | Ok children ->
+        Ok (Codegen.Tuple children)
+     | Error errs -> Error
+                       (String.concat ""
+                          ("failed to codegen Tuple children"
+                           :: errs)))
   | _ -> failwith "can't convert this to codegen expression"
 
 let cmdise = function

@@ -35,6 +35,7 @@ type expr =
   | String of string
   | Integer of int
   | Command of cmd
+  | Tuple of expr list
 
 let generate_lambda generate lam_arg lam_body state =
   let current_lam_number = !state.lam_number in
@@ -157,6 +158,15 @@ let rec generate (expression: expr) (state: state ref): string =
                        ; nt ; generate e1 state
                        ; ")"];
       !code
+   | Tuple (_children) ->
+      failwith "Think about this now.
+
+What is a tuple concretely? It is a collection which you can match over.
+
+You get from a tuple by matching `(match <1 2 3> <n0 n1 n2> n2)` => `3`
+
+Until I create match, I don't really have to allocate these
+"
    | Command _ -> raise (GenerateError "A command should be applied"))
 
 let generate_program expression =
