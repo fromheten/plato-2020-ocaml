@@ -420,35 +420,14 @@ let infer (expr: Read.expr): ((equation list * Read.typ), string) result =
         *                        :: equations in
         *    let new_goals = (env, tagged_value, tagged_value_typ) :: rest_of_goals in
         *    infer_rec new_equations new_goals
-        * | Read.Match (pos_match
-        *               ,tag
-        *               ,((PSym (pos_psym
-        *                       ,pattern)
-        *                 ,body)
-        *                 :: rest_of_cases)) ->
-        *    let body_ty = gensym () in
-        *    let new_equations = (ty, body_ty) :: equations in
-        *    let new_goals = (env, body, body_ty)
-        *                    :: (env, Read.Match (pos_match
-        *                                         ,tag
-        *                                         ,rest_of_cases)
-        *                        ,ty)
-        *                    :: rest_of_goals in
-        *    infer_rec new_equations new_goals
-        * | Read.Match (pos_match
-        *               ,tag      (\* should be named something like "question" *\)
-        *               ,((Read.PTag (pos_ptag
-        *                             ,name
-        *                             ,child)
-        *                 ,body)
-        *                 :: rest_of_cases)) ->
-        *    (\* FIXME HERE *\)
-        *    failwith "Read.Match of PTag not implemented"
-        * (\* DONE *\)
-        * | Read.Match (match_pos, tag, []) ->
-        *    infer_rec equations rest_of_goals *)
-       )
-  in
+        *)
+        | Read.Match (pos, value, cases) ->
+           let equivalent_expr =  (Read.App (pos, Read.Lam (pos, cases), value)) in
+           let equivalent_expr_ty = gensym () in
+           let new_equations = (ty, equivalent_expr_ty) :: equations in
+           let new_goals = (env, equivalent_expr, equivalent_expr_ty) :: rest_of_goals in
+           infer_rec new_equations new_goals
+       ) in
   let ty = gensym () in
   try Ok (infer_rec [] [(empty_env, expr, ty)], ty) with
   | InferError e -> Error e

@@ -39,6 +39,7 @@ type expr =
   | Set of position * expr list
   | Ann of position * typ * expr
   | Dict of position * (expr * expr) list
+  | Match of position * expr * (expr pattern * expr) list
 
 let char_list s =
   let rec exp i l =
@@ -781,14 +782,33 @@ let application
 
 let dict expression source =
   (map (andThen
-								  (andThen (literal "{")
-											  (n_or_more 0 (andThen expression expression)))
-								  (literal "}"))
-			  (Util.take_ok
-						  (fun ((pos, rest), (((), keys_and_vals), ())) ->
-								  ((pos, rest)
-          ,Dict ((0, pos), keys_and_vals)))))
-  source
+	  (andThen (literal "{")
+	     (n_or_more 0 (andThen expression expression)))
+	  (literal "}"))
+     (Util.take_ok
+	(fun ((pos, rest), (((), keys_and_vals), ())) ->
+	  ((pos, rest)
+          ,Dict ((fst source, pos), keys_and_vals)))))
+    source
+
+let match_expr expression source =
+  (map (andThen
+      (andThen
+         (andThen
+            (andThen
+               (literal "(")
+               (literal "match"))
+            expression)
+         (n_or_more 1 (andThen
+                         (pattern expression)
+                         expression)))
+      (literal ")"))
+     (Util.take_ok
+        (fun
+           ((pos, rest), (((((), ()), expr), expr_pattern_expr_list), ())) ->
+          ((pos, rest)
+          ,Match ((fst source, pos), expr, expr_pattern_expr_list)))))
+    source
 
 let rec expression (source_code: source): expr parseresult =
   orElse_list
@@ -805,8 +825,8 @@ let rec expression (source_code: source): expr parseresult =
     ; deep_lambda expression
     ; annotation expression
     (* ; let_expr expression *)
-    (* ; tagged_expr expression
-     * ; match_expr expression *)
+    (* ; tagged_expr expression *)
+    ; match_expr expression
     ; application expression]
     source_code
 
@@ -986,6 +1006,16 @@ let rec string_of_typ = function
   | TTerm (_pos, _, _) ->
      failwith "Terms are sacred"
 
+let string_of_pattern string_of_value = function
+  | PSym (_pos, s) ->
+     string_of_sym s
+  | PTag (_pos, tag, value) ->
+     ['(']
+     @ string_of_sym tag
+     @ [' ']
+     @ string_of_value value
+     @ [')']
+
 let rec string_of_expr = function
   | U8 (_pos, i) ->
      ['('; 'u'; '8';' ']
@@ -1018,6 +1048,18 @@ let rec string_of_expr = function
      @ string_of_expr e0
      @ [' ']
      @ string_of_expr e1
+     @ [')']
+  | Match (_pos, x, cases) ->
+     ['(']
+     @ char_list "match "
+     @ string_of_expr x
+     @ List.concat
+         (List.map (fun (pattern, expr) ->
+              [' ']
+            @ string_of_pattern string_of_expr pattern
+            @ [' ']
+            @ string_of_expr expr)
+            cases)
      @ [')']
   | String (_pos, s) ->
      ['"'] @ char_list s @ ['"']
@@ -1200,4 +1242,4 @@ let parse_args_tests =
      = let pos = (0, String.length src) in
        Ok ((snd pos, [])
           ,OutputCToPath (pos, {input_files = ["mysource.plato"]
-																															;output_file = "myfile.c"})))]
+			       ;output_file = "myfile.c"})))]

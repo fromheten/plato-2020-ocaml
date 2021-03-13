@@ -15,13 +15,13 @@ struct lambda /* closure */ {
 
 union uvalue {
 	char* string;
-	int integer;
+	unsigned char u8;
 	struct lambda lambda;
 };
 
 enum runtime_type {
 	STRING,
-	INTEGER,
+	U8,
 	LAMBDA
 };
 
@@ -70,11 +70,11 @@ struct value makeString(char* s) {
 	return *v;
 }
 
-struct value makeInteger(unsigned char i) { /* used to be int */
+struct value makeU8(unsigned char i) { /* used to be int */
 	union uvalue* uv = (union uvalue*)malloc(sizeof(union uvalue));
 	struct value* v = (struct value*)malloc(sizeof(struct value));
-	uv->integer = i;
-	v->type = INTEGER;
+	uv->u8 = i;
+	v->type = U8;
 	v->actual_value = *uv;
 	return *v;
 }
@@ -84,8 +84,8 @@ void print(struct value v) {
 		printf("<procedure %ld %ld>", (long)v.actual_value.lambda.fun, (long)v.actual_value.lambda.ctx);
 	} else if (v.type == STRING) {
 		printf("%s", v.actual_value.string);
-	} else if (v.type == INTEGER) {
-		printf("%d", v.actual_value.integer);
+	} else if (v.type == U8) {
+		printf("%hhu", v.actual_value.u8);
 	} else {
 		printf("Runtime type error in `print`!");
 		exit(1);

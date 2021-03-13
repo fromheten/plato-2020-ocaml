@@ -49,6 +49,8 @@ let rec codegen_expr: (Read.expr -> (Codegen.expr, string) result) = function
                        (String.concat ""
                           ("failed to codegen Tuple children"
                            :: errs)))
+  | Read.Match (pos, value, cases) ->
+     codegen_expr (Read.App (pos, Read.Lam (pos, cases), value))
   | _ -> failwith "can't convert this to codegen expression"
 
 let cmdise = function

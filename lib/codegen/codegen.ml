@@ -139,7 +139,7 @@ let rec generate (expression: expr) (state: state ref): string =
       !code
    | Integer i ->
       code := Util.str [ !code
-                       ; "makeInteger("
+                       ; "makeU8("
                        ; string_of_int i
                        ; ")"];
       !code
