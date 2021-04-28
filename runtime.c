@@ -78,16 +78,36 @@ struct value makeU8(unsigned char i) { /* used to be int */
 	v->actual_value = *uv;
 	return *v;
 }
+struct value toString(struct value expr) {
+  if (expr.type == LAMBDA) {
+    ssize_t buffer_size =
+      snprintf(NULL,
+               0,
+               "<procedure %ld %ld>",
+               (long)expr.actual_value.lambda.fun,
+               (long)expr.actual_value.lambda.ctx);
+    char *return_string = (char*)malloc(buffer_size + 1);
+    sprintf(return_string,
+            "<procedure %ld %ld>",
+            (long)expr.actual_value.lambda.fun,
+            (long)expr.actual_value.lambda.ctx);
+    return makeString(return_string);
+  } else if (expr.type == U8) {
+    // Allocates storage
+    ssize_t buffer_size = snprintf(NULL, 0, "%u", expr.actual_value.u8);
+    char *return_string = (char*)malloc(buffer_size + 1);
+    // Prints "Hello world!" on hello_world
+    snprintf(return_string, buffer_size + 1, "%u", expr.actual_value.u8);
+    return makeString(return_string);
+  } else if (expr.type == STRING) {
+    puts("toString STRING");
+    return expr;
+  } else {
+    puts("Bad! toString got something it does not recognize. Error in the compiler :o!");
+    exit(1337);
+  };
+}
 
 void print(struct value v) {
-	if (v.type == LAMBDA) {
-		printf("<procedure %ld %ld>", (long)v.actual_value.lambda.fun, (long)v.actual_value.lambda.ctx);
-	} else if (v.type == STRING) {
-		printf("%s", v.actual_value.string);
-	} else if (v.type == U8) {
-		printf("%hhu", v.actual_value.u8);
-	} else {
-		printf("Runtime type error in `print`!");
-		exit(1);
-	}
+  printf("%s", toString(v).actual_value.string);
 }
