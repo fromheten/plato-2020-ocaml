@@ -70,22 +70,58 @@ Here is an example: `(Log your-program)`.
 
 cmdise can only handle programs that begin with applying Log"
 
-let compile (src: string) =
+let compile (src: string): (string, string) result =
   match Read.expression (0
-                         ,(Read.char_list src)) with
+                        ,(Read.char_list src)) with
   | Ok (_rest, expr) ->
-     (match Unify.infer_and_unify expr with
-      | Ok _typ -> (match codegen_expr expr with
-                    | Ok codegen_expr ->
-                       (match cmdise codegen_expr with
-                        | Ok program ->
-                           Ok (Codegen.generate_program program)
-                        | Error e -> Error (Util.str [ "cmdise expr error: "
-                                                     ; e]))
-                    | Error inner_err ->
-                      Error (Util.str ["inner fail: "
-                                      ;inner_err]))
-      | Error e -> failwith e)
+     let new_var () =
+       Type_infer.TypeParameter.TypeParam_tvar
+         (Type_infer.TypeVariable.create ()) in
+     let _var1 = new_var () in
+     let _var2 = new_var () in
+     let stdlib =
+       Type_infer.StringMap.empty
+       |> Type_infer.StringMap.add "Bool" Type_infer.my_Bool
+            (* |> Type_infer.StringMap.add "Log" (Type_infer.my_Command)  *)
+     in
+     (Util.do_then
+        (Util.do_then_error
+           (Type_infer.analyze_result
+              stdlib
+              (Type_infer.Expr.from_read_expr (match expr with
+                                               (* | App (_, Sym (_, f_name), x) when f_name = "Log" -> x *)
+                                               | _ -> expr)))
+           (fun typ ->
+             Printf.printf "Type: %s" (Type_infer.TypeParameter.to_string typ);
+             Ok (Type_infer.TypeParameter.to_string typ))
+           (fun error ->
+             (try raise error
+              with | Type_infer.ParseError e | Type_infer.TypeError e ->
+                      Error e)))
+        (fun _typ ->
+          (match codegen_expr expr with
+           | Ok codegen_expr ->
+              (match cmdise codegen_expr with
+               | Ok program ->
+                  Ok (Codegen.generate_program program)
+               | Error e -> Error (Util.str [ "cmdise expr error: "
+                                            ; e]))
+           | Error inner_err ->
+              Error (Util.str ["inner fail: "
+                              ;inner_err]))))
+
+  (* (match Unify.infer_and_unify expr with
+   *  | Ok _typ -> (match codegen_expr expr with
+   *                | Ok codegen_expr ->
+   *                   (match cmdise codegen_expr with
+   *                    | Ok program ->
+   *                       Ok (Codegen.generate_program program)
+   *                    | Error e -> Error (Util.str [ "cmdise expr error: "
+   *                                                 ; e]))
+   *                | Error inner_err ->
+   *                  Error (Util.str ["inner fail: "
+   *                                  ;inner_err]))
+   *  | Error e -> failwith e) *)
   | Error e ->
      Error (Util.str ["`Platoc.compile` Error: e: "
                      ;e])
@@ -120,13 +156,13 @@ let test test_msg_pairs =
   test_msg_pairs
   |> List.map (fun (msg, test) ->
          if test
-         then Util.str [(* "OK: "; msg *)]
+         then Util.str ["OK: "; msg]
          else Util.str ["Error: "; msg])
   |> List.filter (fun s -> String.length s > 0)
   |> (fun testcases ->
     testcases
-    |> List.cons (Util.str ["Failing tests: "
-                           ;string_of_int (List.length testcases)]))
+    (* |> List.cons (Util.str ["Failing tests: "
+     *                        ;string_of_int (List.length testcases)]) *))
   |> String.concat "\n"
 
 let print_tests_results =
@@ -145,9 +181,10 @@ let print_tests_results =
     ; Read.string_tests
     ; Codegen.ocaml_import_tests
     ; compile_tests
-    ; Unify.unify_tests
+    (* ; Unify.unify_tests *)
     ; Read.string_of_expr_tests
-    ; Unify.infer_tests]
+    (* ; Unify.infer_tests *)
+    ; Type_infer.type_infer_tests]
   |> test
 
 let version = "0.0.0.0.0.1"
@@ -159,6 +196,7 @@ let help_string = "Syntax: $ platoc <options> <input-files.plato>
                    * `-oc` or `--output-c`: Generate C code from your Plato program into a file, e.g. `platoc -oc /path/to/c_source.c myprogram.plato`
                    * `--run <source file>`: Compile a file containing plato source code and run the resulting program
                    * `--publish` publishes from stdin and prints the hash ID to stdout
+                   * `--tests` to show test results
                    "
 
 let welcome_text =

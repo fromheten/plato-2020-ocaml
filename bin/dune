@@ -2,6 +2,7 @@
  (name platoc)
  (libraries read
             util
-            unify
+            type_infer
+            ; unify
             codegen
             cryptokit))

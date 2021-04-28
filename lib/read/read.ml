@@ -385,8 +385,7 @@ let n_or_more_tests =
    , n_or_more
        4
        (literal "a")
-       (0
-       ,(char_list "   aabaaaa "))
+       (0 ,(char_list "   aabaaaa "))
      = Ok ((9, [' '])
 	  ,[(); (); (); (); (); ()]))
    (* ;("andThen literals"
@@ -1127,7 +1126,7 @@ type compiler_cmd =
 
 let parse_arg_test_results source =
   (map
-     (literal "--test-results")
+     (literal "--tests")
      (Util.take_ok (fun ((end_pos, rest), ()) ->
           ((end_pos, rest)
           ,ShowPrintTests (fst source, end_pos)))))

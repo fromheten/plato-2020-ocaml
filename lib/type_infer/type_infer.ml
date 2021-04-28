@@ -15,6 +15,8 @@ module Expr = struct
        Lambda (pattern, from_read_expr expr)
     | Lam (_pos, _patterns_exprs) ->
        failwith "Currently I can only convert Lam with a PSym"
+    | App (_pos, Sym (_, "Log"), _e1) ->
+       failwith "Can't yet type check Commands"
     | App (_pos, e0, e1) ->
        Apply (from_read_expr e0, from_read_expr e1)
     | Sym (_pos, x) ->
@@ -167,6 +169,7 @@ let my_String = (let arg_type = TypeVariable.create () in
                 )
 let my_Bool = TypeParameter.TypeParam_top (TypeOperator.create "Bool" [])
 let my_Int = TypeParameter.TypeParam_top (TypeOperator.create "String" [])
+(* let my_Any () = TypeParameter.TypeParam_tvar (TypeVariable.create ()) *)
 
 module TVSet = Set.Make(TypeVariable)
 module StringMap = Map.Make(String)
@@ -175,7 +178,7 @@ exception ParseError of string
 exception TypeError of string
 exception UnificationError of string
 
-let rec analyse node env non_generic =
+let rec analyse node env non_generic: TypeParameter.t =
   match node with
   | Expr.Ident name -> get_type name env non_generic
   | Expr.Apply (fn, arg) ->
@@ -236,8 +239,16 @@ and fresh t non_generic: TypeParameter.t =
        else p
     | TypeParameter.TypeParam_top(top) ->
        TypeParameter.TypeParam_top (TypeOperator.create top.TypeOperator.name
-                               (List.map (fun x -> freshrec x) top.TypeOperator.types))
+                                      (List.map (fun x -> freshrec x) top.TypeOperator.types))
   in freshrec t
+
+(* Har igång type inferrence som kan göra letrec nu, Hindley Milner.
+ *
+ * Tänker på unification - man har ju två varianter av expr, Term och Symbol, där Term har ett namn och en lista med expressions.
+ *
+ * Med det kan man implementera OCH-relationer, alltså att "->" har två variablar "a" och "b". Den är alltså "forall", och implementerar "och"-relationen.
+ *
+ * "Eller" eller "or"-relationen är ännu inte implementerad, som i hur en (Maybe a) är en (Just a) eller None. Tänker att man behöver en ny variant på expr förutom "Term", som istället kunde heta "OrTerm" eller så. En `| OrTerm of string * expr list`. Så när unify finner ut typen av en variabel, och den variabeln i evaluation context pekar på en OrTerm, *)
 
 (* Unify the two types t1 and t2
 Makes the types t1 and t2 the same *)
@@ -260,8 +271,15 @@ and unify t1 t2: unit =
      let top2_name = top2.TypeOperator.name in
      let top1_types_size = (List.length top1.TypeOperator.types) in
      let top2_types_size = (List.length top2.TypeOperator.types) in
+     (* JESPER! Här kollar vi att båda Terms eller Type Operators (TypeParam_top) har samma namn och antal argument *)
+     (* Med OR type operators aka terms, så måste vi istället kolla om den ena eller andra TypeOperator har label som en "child" av den andra. Detta för att "(Just a)" inte är = (Maybe a), men matchar child of (Maybe a).  *)
      if ((top1_name <> top2_name) || (top1_types_size <> top2_types_size))
      then raise (TypeError ("Type mismatch " ^ (TypeOperator.to_string top1) ^ " != " ^ (TypeOperator.to_string top2)));
+     (* Här kollar den bara om TypeOperators top1 och top2 är lika - men med OR behöver den också kolla om den ena är "child" till den andra, vilket är enkelt som att kolla om List.contains i den ena eller andras children. Kom ihåg, en typ = Sym of string | TypeOperator of string * typ list | TypeOperatorOr of string * typ list.
+
+Så (Maybe a) => (TypeOperatorOr "Maybe" [Sym "a"])
+Och (Just a) => (TypeOperator "Just" [Sym "a"])
+unify (Maybe a) (Just b) => (Maybe a)*)
      List.iter2 unify (top1.TypeOperator.types) (top2.TypeOperator.types)
 (* | _ -> raise (UnificationError "Not unified") *)
 
@@ -297,6 +315,34 @@ let try_exp env node =
   with
   | ParseError e | TypeError e ->
      print_endline e
+
+let analyze_result env node =
+  try Ok (analyse node env TVSet.empty)
+  with
+  | ParseError e -> Error (ParseError e)
+  | TypeError e -> Error (TypeError e)
+
+let type_infer_tests =
+  [( Printf.sprintf "type of K combinator is (-> a b a), actually: %s"
+       (TypeParameter.to_string (analyse
+                                   (Expr.Lambda ("x"
+                                               , (Expr.Lambda
+                                                    ("y"
+                                                    , Expr.Ident "x"))))
+                                   StringMap.empty TVSet.empty))
+   , analyse (Expr.Lambda ("x", (Expr.Lambda ("y", Expr.Ident "x")))) StringMap.empty TVSet.empty
+     = TypeParameter.TypeParam_top
+         {TypeOperator.name = "->";
+          types =
+            [TypeParameter.TypeParam_tvar
+               {TypeVariable.id = 4; name = ""; instance = None};
+             TypeParameter.TypeParam_top
+               {TypeOperator.name = "->";
+                types =
+                  [TypeParameter.TypeParam_tvar
+                     {TypeVariable.id = 5; name = ""; instance = None};
+                   TypeParameter.TypeParam_tvar
+                     {TypeVariable.id = 4; name = ""; instance = None}]}]})]
 
 (* let () =
  *   let var1 = TypeParameter.TypeParam_tvar (TypeVariable.create ()) in

@@ -62,3 +62,13 @@ let equals x y = x = y
 let neg f boolean = (not (f boolean))
 
 let xyyx f x y = f y x
+
+let do_then r0 r1 =
+  match r0 with
+  | Ok value -> r1 value
+  | Error e -> Error e
+
+let do_then_error x then_fn else_fn =
+  match x with
+  | Ok value -> then_fn value
+  | Error e -> else_fn e
