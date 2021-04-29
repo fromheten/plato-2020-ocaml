@@ -58,28 +58,31 @@ type env =
   { mutable next_variable_id : int
   ; mutable next_variable_name : char }
 
-let global_env = {next_variable_id = 0
+let new_env () = {next_variable_id = 0
                  ;next_variable_name = 'a'}
+
+(* let global_env_old = new_env () *)
 
 module rec TypeVariable : sig
          type t = { id: int
                   ; mutable name: string
-                  ; mutable instance: TypeParameter.t option }
-         val create: unit -> t
-         val name: t -> string
-         val to_string: t -> string
+                  ; mutable instance: Type.t option }
+         val create: env -> t
+         val name: env -> t -> string
+         val to_string: env -> t -> string
          val compare: t -> t -> int
          val hash: t -> int
          val equal: t -> t -> bool
        end = struct
   type t = {id: int
            ;mutable name: string
-           ;mutable instance: TypeParameter.t option }
-  let create () = global_env.next_variable_id <- global_env.next_variable_id + 1;
-                  { id = global_env.next_variable_id - 1
-                  ; name = ""
-                  ; instance = None }
-  let name tv =
+           ;mutable instance: Type.t option }
+  let create global_env =
+    global_env.next_variable_id <- global_env.next_variable_id + 1;
+    { id = global_env.next_variable_id - 1
+    ; name = ""
+    ; instance = None }
+  let name global_env tv =
     if tv.name = ""
     then begin
         tv.name <- Char.escaped global_env.next_variable_name;
@@ -87,10 +90,10 @@ module rec TypeVariable : sig
       end;
     tv.name
 
-  let to_string tv =
+  let to_string global_env tv =
     match tv.instance with
-    | None -> name tv
-    | Some i -> TypeParameter.to_string i
+    | None -> name global_env tv
+    | Some i -> Type.to_string global_env i
 
   let compare t1 t2 = t2.id - t1.id
   let hash tv = tv.id
@@ -98,55 +101,49 @@ module rec TypeVariable : sig
 end
 
    and TypeOperator: sig
-     type t = { name: string; types: TypeParameter.t list}
-     val create: string -> TypeParameter.t list -> t
-     val to_string: t -> string
+     (* type t = { name: string; types: Type.t list} *)
+     type t = string * Type.t list
+     val create: string -> Type.t list -> t
+     val to_string: env -> t -> string
    end = struct
-     type t = { name : string
-              ; types: TypeParameter.t list}
-     let create n tl = { name = n
-                       ; types = tl }
-     let to_string t = match t.types with
-       | [] -> t.name
-       | hd::tl::[] ->
-          Printf.sprintf "(%s %s %s)" (TypeParameter.to_string hd) t.name (TypeParameter.to_string tl)
-       | _ -> t.types
-              |> List.map TypeParameter.to_string
-              |> List.fold_left (fun a b -> a ^ " " ^ b) ""
-              |> Printf.sprintf "%s %s" t.name
-
-     (* let compare top1 top2 = compare top1.types top2.types *)
-     (* let hash tv =
-      *   let rec hash' p = function
-      *     | t::tl ->
-      *        (pow 31 p) + (TypeVariable.hash t) + (hash' (p + 1) tl)
-      *     | [] -> 0
-      *   in
-      *   hash' 0 tv.types *)
+     type t = string * Type.t list
+     let create n tl = (n, tl)
+     let to_string global_env = function
+         (name, types) ->
+         (match types with
+          | [] -> name
+          | hd::tl::[] ->
+             Printf.sprintf "(%s %s %s)"
+               name
+               (Type.to_string global_env hd)
+               (Type.to_string global_env tl)
+          | _ -> types
+                 |> List.map (Type.to_string global_env)
+                 |> List.fold_left (fun a b -> a ^ " " ^ b) ""
+                 |> Printf.sprintf "%s %s" name)
    end
 
-   and TypeParameter: sig
-     type t = TypeParam_tvar of TypeVariable.t
-            | TypeParam_top of TypeOperator.t
-     val to_string: t -> string
+   and Type: sig
+     type t = TyVar of TypeVariable.t
+            | TyOp of TypeOperator.t
+     val to_string: env -> t -> string
    end = struct
      type t =
-       | TypeParam_tvar of TypeVariable.t
-       | TypeParam_top of TypeOperator.t
-     let to_string = function
-       | TypeParam_tvar tv -> TypeVariable.to_string tv
-       | TypeParam_top top -> TypeOperator.to_string top
+       | TyVar of TypeVariable.t
+       | TyOp of TypeOperator.t
+     let to_string global_env = function
+       | TyVar tv -> TypeVariable.to_string global_env tv
+       | TyOp top -> TypeOperator.to_string global_env top
    end
 
    and Function: sig
-     val create: TypeParameter.t -> TypeParameter.t -> TypeParameter.t
+     val create: Type.t -> Type.t -> Type.t
    end = struct
      let create from_type to_type =
-       TypeParameter.TypeParam_top
-         { TypeOperator.name = "->"
-         ; TypeOperator.types = [from_type; to_type] }
+       Type.TyOp ("->", [from_type; to_type])
    end
-
+let arrow = Function.create
+let ty_var global_env = Type.TyVar (TypeVariable.create global_env)
 let rec zip xl yl =
   match (xl, yl) with
   | (x::xs, y::ys) -> (x, y) :: zip xs ys
@@ -154,92 +151,100 @@ let rec zip xl yl =
   | _ -> assert false
 
 (*  Basic types are constructed with a nullary type constructor  *)
-let my_U8 =
-  (let arg_type = TypeVariable.create () in
-   let arg_type_param = TypeParameter.TypeParam_tvar arg_type in
-   Function.create arg_type_param (TypeParameter.TypeParam_tvar
-                                     (TypeVariable.create ()))
-  )
+let my_U8 global_env =
+  (let arg_type = TypeVariable.create global_env in
+   let arg_type_param = Type.TyVar arg_type in
+   Function.create arg_type_param (Type.TyVar
+                                     (TypeVariable.create global_env)))
 (* (TypeOperator.create "U8" []) *)
-(* let my_String = TypeParameter.TypeParam_top (TypeOperator.create "String" []) *)
-let my_String = (let arg_type = TypeVariable.create () in
-                 let arg_type_param = TypeParameter.TypeParam_tvar arg_type in
-                 Function.create arg_type_param (TypeParameter.TypeParam_tvar
-                                                   (TypeVariable.create ()))
-                )
-let my_Bool = TypeParameter.TypeParam_top (TypeOperator.create "Bool" [])
-let my_Int = TypeParameter.TypeParam_top (TypeOperator.create "String" [])
-(* let my_Any () = TypeParameter.TypeParam_tvar (TypeVariable.create ()) *)
+(* let my_String = Type.TyOp (TypeOperator.create "String" []) *)
+let my_String global_env =
+  (let arg_type = TypeVariable.create global_env in
+   let arg_type_param = Type.TyVar arg_type in
+   Function.create arg_type_param (Type.TyVar
+                                     (TypeVariable.create global_env)))
+let my_Bool = Type.TyOp (TypeOperator.create "Bool" [])
+let my_Int = Type.TyOp (TypeOperator.create "String" [])
+(* let my_Any () = Type.TyVar (TypeVariable.create ()) *)
 
 module TVSet = Set.Make(TypeVariable)
-module StringMap = Map.Make(String)
+(* module StringMap = Map.Make(String) *)
 
 exception ParseError of string
 exception TypeError of string
 exception UnificationError of string
 
-let rec analyse node env non_generic: TypeParameter.t =
+let rec analyse global_env node (env: (string * Type.t) list) non_generic: Type.t =
   match node with
-  | Expr.Ident name -> get_type name env non_generic
+  | Expr.Ident name -> get_type global_env name env non_generic
   | Expr.Apply (fn, arg) ->
-     let fun_type = analyse fn env non_generic in
-     let arg_type = analyse arg env non_generic in
-     let result_type = TypeVariable.create () in
-     let result_type_param = TypeParameter.TypeParam_tvar result_type in
-     unify (Function.create arg_type result_type_param) fun_type;
+     let fun_type = analyse global_env fn env non_generic in
+     let arg_type = analyse global_env arg env non_generic in
+     let result_type = TypeVariable.create global_env in
+     let result_type_param = Type.TyVar result_type in
+     unify global_env (Function.create arg_type result_type_param) fun_type;
      result_type_param
   | Expr.Lambda (v, body) ->
-     let arg_type = TypeVariable.create () in
-     let arg_type_param = TypeParameter.TypeParam_tvar arg_type in
-     let new_env = StringMap.add v arg_type_param env in
+     let arg_type = TypeVariable.create global_env in
+     let arg_type_param = Type.TyVar arg_type in
+     (* let new_env = StringMap.add v arg_type_param env in *)
+     let new_env = (v, arg_type_param) :: env in
      let new_non_generic = TVSet.add arg_type non_generic in
-     let result_type = analyse body new_env new_non_generic in
+     let result_type = analyse global_env body new_env new_non_generic in
      Function.create arg_type_param result_type
   | Expr.Let (v, defn, body) ->
-     let defn_type = analyse defn env non_generic in
-     let new_env = StringMap.add v defn_type env in
-     analyse body new_env non_generic
+     let defn_type = analyse global_env defn env non_generic in
+     (* let new_env = StringMap.add v defn_type env in *)
+     let new_env = (v, defn_type) :: env in
+     analyse global_env body new_env non_generic
   | Expr.Letrec (v, defn, body) ->
-     let new_type = TypeVariable.create () in
-     let new_type_param = TypeParameter.TypeParam_tvar new_type in
-     let new_env = StringMap.add v new_type_param env in
+     let new_type = TypeVariable.create global_env in
+     let new_type_param = Type.TyVar new_type in
+     (* let new_env = StringMap.add v new_type_param env in *)
+     let new_env = (v, new_type_param) :: env in
      let new_non_generic = TVSet.add new_type non_generic in
-     let defn_type = analyse defn new_env new_non_generic in
-     unify new_type_param defn_type;
-     analyse body new_env non_generic
+     let defn_type = analyse global_env defn new_env new_non_generic in
+     unify global_env new_type_param defn_type;
+     analyse global_env body new_env non_generic
   | Expr.None -> assert false
   | Expr.U8 _n ->
-     let arg_type = TypeVariable.create () in
-     let arg_type_param = TypeParameter.TypeParam_tvar arg_type in
-     Function.create arg_type_param (TypeParameter.TypeParam_tvar
-                                       (TypeVariable.create ()))
+     let arg_type = TypeVariable.create global_env in
+     let arg_type_param = Type.TyVar arg_type in
+     Function.create arg_type_param (Type.TyVar
+                                       (TypeVariable.create global_env))
   | Expr.Annotation (_t, _expr) ->
      failwith "Can't do this Ann..."
 
-and get_type name env non_generic =
-  if StringMap.mem name env
-  then fresh (StringMap.find name env) non_generic
+and get_type global_env name env non_generic =
+  (* if StringMap.mem name env *)
+  if List.mem_assoc name env
+  then fresh
+         global_env
+         (* (StringMap.find name env) *)
+         (List.assoc name env)
+         non_generic
   else if is_integer_literal name
-  then my_U8
+  then my_U8 global_env
   else raise (ParseError ("Undefined symbol " ^ name))
-and fresh t non_generic: TypeParameter.t =
+and fresh global_env t non_generic: Type.t =
   let mappings = Hashtbl.create 30 in
-  let rec freshrec tp: TypeParameter.t =
+  let rec freshrec tp: Type.t =
     let p = prune tp in
     match p with
-    | TypeParameter.TypeParam_tvar tv ->
+    | Type.TyVar tv ->
        let non_generic_list =
-         List.map (fun a -> TypeParameter.TypeParam_tvar a) (TVSet.elements non_generic) in
+         List.map (fun a -> Type.TyVar a) (TVSet.elements non_generic) in
        if is_generic tv non_generic_list
        then begin
            if not (Hashtbl.mem mappings p)
-           then Hashtbl.replace mappings p (TypeParameter.TypeParam_tvar (TypeVariable.create ()));
+           then Hashtbl.replace mappings p (Type.TyVar (TypeVariable.create global_env));
            Hashtbl.find mappings p
          end
        else p
-    | TypeParameter.TypeParam_top(top) ->
-       TypeParameter.TypeParam_top (TypeOperator.create top.TypeOperator.name
-                                      (List.map (fun x -> freshrec x) top.TypeOperator.types))
+    | Type.TyOp (name, child_types) ->
+       Type.TyOp (TypeOperator.create
+                    name
+                    (List.map (fun x -> freshrec x) child_types))
   in freshrec t
 
 (* Har igång type inferrence som kan göra letrec nu, Hindley Milner.
@@ -252,40 +257,47 @@ and fresh t non_generic: TypeParameter.t =
 
 (* Unify the two types t1 and t2
 Makes the types t1 and t2 the same *)
-and unify t1 t2: unit =
+and unify global_env t1 t2: unit =
   let a = prune t1 in
   let b = prune t2 in
   match (a, b) with
-  | (TypeParameter.TypeParam_tvar(tv), _) ->
+  | (Type.TyVar(tv), _) ->
      if a <> b
      then begin
          if occurs_in_type tv b
          then raise (TypeError "recursive unification")
          else tv.TypeVariable.instance <- Some b
        end
-  | (TypeParameter.TypeParam_top(_top), TypeParameter.TypeParam_tvar(_tv)) ->
-     unify b a
-  | (TypeParameter.TypeParam_top(top1), TypeParameter.TypeParam_top(top2)) ->
+  | (Type.TyOp(_top), Type.TyVar(_tv)) ->
+     unify global_env b a
+  | (Type.TyOp (top1_name, top1_types), Type.TyOp (top2_name, top2_types)) ->
      (* Same names and arity *)
-     let top1_name = top1.TypeOperator.name in
-     let top2_name = top2.TypeOperator.name in
-     let top1_types_size = (List.length top1.TypeOperator.types) in
-     let top2_types_size = (List.length top2.TypeOperator.types) in
-     (* JESPER! Här kollar vi att båda Terms eller Type Operators (TypeParam_top) har samma namn och antal argument *)
+     let top1_name = top1_name in
+     let top2_name = top2_name in
+     let top1_types_size = (List.length top1_types) in
+     let top2_types_size = (List.length top2_types) in
+     (* JESPER! Här kollar vi att båda Terms eller Type Operators (TyOp) har samma namn och antal argument *)
      (* Med OR type operators aka terms, så måste vi istället kolla om den ena eller andra TypeOperator har label som en "child" av den andra. Detta för att "(Just a)" inte är = (Maybe a), men matchar child of (Maybe a).  *)
      if ((top1_name <> top2_name) || (top1_types_size <> top2_types_size))
-     then raise (TypeError ("Type mismatch " ^ (TypeOperator.to_string top1) ^ " != " ^ (TypeOperator.to_string top2)));
+     then raise (TypeError ("Type mismatch "
+                            ^ (TypeOperator.to_string
+                                 global_env
+                                 (top1_name, top1_types))
+                            ^ " != "
+                            ^ (TypeOperator.to_string
+                                 global_env
+                                 (top2_name, top2_types))));
      (* Här kollar den bara om TypeOperators top1 och top2 är lika - men med OR behöver den också kolla om den ena är "child" till den andra, vilket är enkelt som att kolla om List.contains i den ena eller andras children. Kom ihåg, en typ = Sym of string | TypeOperator of string * typ list | TypeOperatorOr of string * typ list.
 
 Så (Maybe a) => (TypeOperatorOr "Maybe" [Sym "a"])
 Och (Just a) => (TypeOperator "Just" [Sym "a"])
 unify (Maybe a) (Just b) => (Maybe a)*)
-     List.iter2 unify (top1.TypeOperator.types) (top2.TypeOperator.types)
+     List.iter2 (unify global_env) (top1_types) (top2_types)
 (* | _ -> raise (UnificationError "Not unified") *)
 
-and prune (t: TypeParameter.t) =
+and prune (t: Type.t) =
   match t with
-  | TypeParameter.TypeParam_tvar tv ->
+  | Type.TyVar tv ->
      (match tv.TypeVariable.instance with
       | Some stv ->
          tv.TypeVariable.instance <- Some (prune stv);
@@ -298,8 +310,8 @@ and is_generic (v: TypeVariable.t) non_generic = not (occurs_in v non_generic)
 and occurs_in_type (v: TypeVariable.t) t2 =
   let pruned_t2 = prune t2 in
   match pruned_t2 with
-  | TypeParameter.TypeParam_tvar tv when tv = v -> true
-  | TypeParameter.TypeParam_top top -> occurs_in v top.TypeOperator.types
+  | Type.TyVar tv when tv = v -> true
+  | Type.TyOp  (_name, tyop_types) -> occurs_in v tyop_types
   | _ -> false
 
 and occurs_in (t: TypeVariable.t) types = List.exists (fun t2 -> occurs_in_type t t2) types
@@ -309,46 +321,55 @@ and is_integer_literal name =
       true
   with Failure _ -> false
 
-let try_exp env node =
+let try_exp global_env env node =
   Printf.printf "%s: " (Expr.to_string node);
-  try print_endline (TypeParameter.to_string (analyse node env TVSet.empty))
+  try print_endline (Type.to_string
+                       global_env
+                       (analyse
+                          global_env
+                          node
+                          env
+                          TVSet.empty))
   with
   | ParseError e | TypeError e ->
      print_endline e
 
-let analyze_result env node =
-  try Ok (analyse node env TVSet.empty)
+let analyze_result global_env env node =
+  try Ok (analyse global_env node env TVSet.empty)
   with
   | ParseError e -> Error (ParseError e)
   | TypeError e -> Error (TypeError e)
 
 let type_infer_tests =
-  [( Printf.sprintf "type of K combinator is (-> a b a), actually: %s"
-       (TypeParameter.to_string (analyse
-                                   (Expr.Lambda ("x"
-                                               , (Expr.Lambda
-                                                    ("y"
-                                                    , Expr.Ident "x"))))
-                                   StringMap.empty TVSet.empty))
-   , analyse (Expr.Lambda ("x", (Expr.Lambda ("y", Expr.Ident "x")))) StringMap.empty TVSet.empty
-     = TypeParameter.TypeParam_top
-         {TypeOperator.name = "->";
-          types =
-            [TypeParameter.TypeParam_tvar
-               {TypeVariable.id = 4; name = ""; instance = None};
-             TypeParameter.TypeParam_top
-               {TypeOperator.name = "->";
-                types =
-                  [TypeParameter.TypeParam_tvar
-                     {TypeVariable.id = 5; name = ""; instance = None};
-                   TypeParameter.TypeParam_tvar
-                     {TypeVariable.id = 4; name = ""; instance = None}]}]})]
+  [( let actually =
+       (let global_env = new_env () in
+        (analyse
+           global_env
+           (Expr.Lambda ("x"
+                       , (Expr.Lambda
+                            ("y"
+                            , Expr.Ident "x"))))
+           []
+           TVSet.empty)) in
+     Printf.sprintf
+       "type of K combinator is (-> a b a), actually: %s"
+       (Type.to_string
+          (new_env ())
+          actually)
+   , actually
+     = (Type.TyOp
+          ("->",
+           [Type.TyVar {TypeVariable.id = 0; name = ""; instance = None};
+            Type.TyOp
+              ("->",
+               [Type.TyVar {TypeVariable.id = 1; name = ""; instance = None};
+                Type.TyVar {TypeVariable.id = 0; name = ""; instance = None}])])))]
 
-(* let () =
- *   let var1 = TypeParameter.TypeParam_tvar (TypeVariable.create ()) in
- *   let var2 = TypeParameter.TypeParam_tvar (TypeVariable.create ()) in
- *   let pair_type = TypeParameter.TypeParam_top (TypeOperator.create "*" [var1; var2]) in
- *   let var3 = TypeParameter.TypeParam_tvar (TypeVariable.create ()) in
+    (* let () =
+ *   let var1 = Type.TyVar (TypeVariable.create ()) in
+ *   let var2 = Type.TyVar (TypeVariable.create ()) in
+ *   let pair_type = Type.TyOp (TypeOperator.create "*" [var1; var2]) in
+ *   let var3 = Type.TyVar (TypeVariable.create ()) in
  *   let my_env =
  *     StringMap.empty
  *     |> StringMap.add "pair" (Function.create var1 (Function.create var2 pair_type))

@@ -61,39 +61,27 @@ let cmdise = function
                      , other_expressions))
   | _ ->
      failwith "It seems your program returns something other than an effect.
-
 An effect can only be `Log` currently.
-
 Make your program start with applying Log.
-
 Here is an example: `(Log your-program)`.
-
 cmdise can only handle programs that begin with applying Log"
 
 let compile (src: string): (string, string) result =
   match Read.expression (0
                         ,(Read.char_list src)) with
   | Ok (_rest, expr) ->
-     let new_var () =
-       Type_infer.TypeParameter.TypeParam_tvar
-         (Type_infer.TypeVariable.create ()) in
-     let _var1 = new_var () in
-     let _var2 = new_var () in
+     let new_env () = (Type_infer.new_env ()) in
      let stdlib =
-       Type_infer.StringMap.empty
-       |> Type_infer.StringMap.add "Bool" Type_infer.my_Bool
-            (* |> Type_infer.StringMap.add "Log" (Type_infer.my_Command)  *)
-     in
+       [("Bool", Type_infer.my_Bool)] in
      (Util.do_then
         (Util.do_then_error
            (Type_infer.analyze_result
+              (new_env ())
               stdlib
-              (Type_infer.Expr.from_read_expr (match expr with
-                                               (* | App (_, Sym (_, f_name), x) when f_name = "Log" -> x *)
-                                               | _ -> expr)))
+              (Type_infer.Expr.from_read_expr expr))
            (fun typ ->
-             Printf.printf "Type: %s" (Type_infer.TypeParameter.to_string typ);
-             Ok (Type_infer.TypeParameter.to_string typ))
+             Printf.printf "Type: %s" (Type_infer.Type.to_string (new_env ()) typ);
+             Ok (Type_infer.Type.to_string (new_env ()) typ))
            (fun error ->
              (try raise error
               with | Type_infer.ParseError e | Type_infer.TypeError e ->
@@ -109,19 +97,6 @@ let compile (src: string): (string, string) result =
            | Error inner_err ->
               Error (Util.str ["inner fail: "
                               ;inner_err]))))
-
-  (* (match Unify.infer_and_unify expr with
-   *  | Ok _typ -> (match codegen_expr expr with
-   *                | Ok codegen_expr ->
-   *                   (match cmdise codegen_expr with
-   *                    | Ok program ->
-   *                       Ok (Codegen.generate_program program)
-   *                    | Error e -> Error (Util.str [ "cmdise expr error: "
-   *                                                 ; e]))
-   *                | Error inner_err ->
-   *                  Error (Util.str ["inner fail: "
-   *                                  ;inner_err]))
-   *  | Error e -> failwith e) *)
   | Error e ->
      Error (Util.str ["`Platoc.compile` Error: e: "
                      ;e])
@@ -152,6 +127,26 @@ let compile_tests =
                     , Codegen.String "Hello first")
                  , Codegen.String "Bye!"))))]
 
+let workflow_tests =
+  [(let src = "(((λ [x y] x) (u8 1)) (u8 2))" in
+    let my_env = (Type_infer.new_env ()) in
+    let expect = Type_infer.Type.TyOp ("U8", []) in
+    let actual =
+      (match Read.expression (0, Read.char_list src) with
+       | Ok (_state, expr) ->
+          let type_expr = Type_infer.Expr.from_read_expr expr in
+          (match Type_infer.analyze_result my_env [] type_expr with
+           | Ok t -> Ok t
+           | Error _exn -> Error "Type check failure...")
+      | Error e -> Error e) in
+    (Util.str ["Parse and typecheck K applied. Should just be "
+              ;(Type_infer.Type.to_string my_env expect)
+              ;", actually: "
+              ;(match actual with
+                | Ok actual -> (Type_infer.Type.to_string my_env actual)
+                | Error e -> e)])
+    ,actual = Ok expect)]
+
 let test test_msg_pairs =
   test_msg_pairs
   |> List.map (fun (msg, test) ->
@@ -181,6 +176,7 @@ let print_tests_results =
     ; Read.string_tests
     ; Codegen.ocaml_import_tests
     ; compile_tests
+    ; workflow_tests
     (* ; Unify.unify_tests *)
     ; Read.string_of_expr_tests
     (* ; Unify.infer_tests *)
