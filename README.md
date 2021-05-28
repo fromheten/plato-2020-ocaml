@@ -16,7 +16,7 @@ To run a toplevel in Emacs/Tuareg mode, you want `C-c C-b dune utop . -- -emacs`
 
 ## Usage
 
-* Print tests `$ dune exec bin/platoc.exe --test-results`
+* Print tests `$ dune exec bin/platoc.exe --tests`
 * Compile and run a program `$ dune exec bin/platoc.exe -o ./out/main.c (Log "Hello") && cc -o ./out/a.out && ./out/a.out`
 
 ## Installation
