@@ -14,8 +14,9 @@ type context =
   { name: string
   ; vars: string list
   ; parent: context option
-  }
-
+  } [@@deriving yojson]
+let string_of_context ctx =
+  Yojson.Safe.to_string (context_to_yojson ctx)
 type state =
   { lam_number: int
   ; main_code: string
@@ -36,6 +37,7 @@ type expr =
   | Integer of int
   | Command of cmd
   | Tuple of expr list
+  | Let of string * expr * expr
 
 let generate_lambda generate lam_arg lam_body state =
   let current_lam_number = !state.lam_number in
@@ -95,8 +97,7 @@ let generate_lambda generate lam_arg lam_body state =
                        ; nt ; "return "; body_generated; ";"
                        ; n ;"}"
                        ; n]])};
-
-      (* state := { !state with current_context = Some parent}; *)
+      state := { !state with current_context = Some parent};
       final_string
    | None -> final_string)
 
@@ -105,6 +106,11 @@ exception GenerateError of string
 let rec generate (expression: expr) (state: state ref): string =
   let code = ref "" in
   (match expression with
+   | Let (name, definition, body) ->
+      generate
+        (App (Lam (name, body)
+             ,definition))
+        state
    | Lam (lam_arg, lam_body) ->
       code := Util.str
                 [ !code
@@ -148,6 +154,12 @@ let rec generate (expression: expr) (state: state ref): string =
                        ; "print("
                        ; generate expression_to_print state
 
+                       ; ")"];
+      !code
+   | App(Sym my_symbol, expr_to_convert) when my_symbol = "string" ->
+      code := Util.str [ !code
+                       ; "toString("
+                       ; generate expr_to_convert state
                        ; ")"];
       !code
    | App (e0, e1) ->

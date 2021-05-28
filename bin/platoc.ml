@@ -51,6 +51,11 @@ let rec codegen_expr: (Read.expr -> (Codegen.expr, string) result) = function
                            :: errs)))
   | Read.Match (pos, value, cases) ->
      codegen_expr (Read.App (pos, Read.Lam (pos, cases), value))
+  | Let (_pos, name, definition, body) ->
+     (match (codegen_expr definition, codegen_expr body) with
+      | Ok def, Ok bod ->
+         Ok (Codegen.Let (name, def, bod))
+      | Error e, _| _, Error e -> Error e)
   | _ -> failwith "can't convert this to codegen expression"
 
 let cmdise = function
@@ -71,32 +76,70 @@ let compile (src: string): (string, string) result =
                         ,(Read.char_list src)) with
   | Ok (_rest, expr) ->
      let new_env () = (Type_infer.new_env ()) in
+     let env = (new_env ()) in
      let stdlib =
-       [("Bool", Type_infer.my_Bool)] in
-     (Util.do_then
-        (Util.do_then_error
-           (Type_infer.analyze_result
-              (new_env ())
-              stdlib
-              (Type_infer.Expr.from_read_expr expr))
-           (fun typ ->
-             Printf.printf "Type: %s" (Type_infer.Type.to_string (new_env ()) typ);
-             Ok (Type_infer.Type.to_string (new_env ()) typ))
-           (fun error ->
-             (try raise error
-              with | Type_infer.ParseError e | Type_infer.TypeError e ->
-                      Error e)))
-        (fun _typ ->
-          (match codegen_expr expr with
-           | Ok codegen_expr ->
-              (match cmdise codegen_expr with
-               | Ok program ->
-                  Ok (Codegen.generate_program program)
-               | Error e -> Error (Util.str [ "cmdise expr error: "
-                                            ; e]))
-           | Error inner_err ->
-              Error (Util.str ["inner fail: "
-                              ;inner_err]))))
+       [("Bool", Type_infer.Type.TyTagUnion (["True", Type_infer.my_Unit
+                                             ;"False", Type_infer.my_Unit]))
+       ;("Command", Type_infer.Type.TyTagUnion
+                      (["Log", Type_infer.Function.create
+
+                                 Type_infer.my_String
+                                 Type_infer.my_Unit]))
+       ;("string", Type_infer.Function.create (Type_infer.ty_var env) Type_infer.my_String)
+        (* ("Bool", Type_infer.my_Bool) *)] in
+     (match
+        (match (Type_infer.analyze_result
+                  env
+                  stdlib
+                  (Type_infer.Expr.from_read_expr expr)) with
+         | Ok typ -> Printf.printf "\nType: %s\n" (Type_infer.Type.to_string (new_env ()) typ);
+                     Ok (Type_infer.Type.to_string (new_env ()) typ)
+         | Error e -> Error e) with
+      | Ok _typ -> (match codegen_expr expr with
+                   | Ok codegen_expr ->
+                      (match cmdise codegen_expr with
+                       | Ok program ->
+                          Ok (Codegen.generate_program program)
+                       | Error e -> Error (Util.str [ "cmdise expr error: "
+                                                    ; e]))
+                   | Error inner_err ->
+                      Error (Util.str ["inner fail: "
+                                      ;inner_err]))
+      | Error e -> Error (match e with
+                          | Type_infer.ParseError msg  ->
+                             "ParseError: " ^  msg
+                          | Type_infer.TypeError msg ->
+                             "TypeError: " ^  msg
+                          | Type_infer.UnificationError msg ->
+                             "UnificationError: " ^  msg)
+
+     (* try raise exn
+      * with | Type_infer.ParseError e | Type_infer.TypeError e ->
+      *         Error e *))
+       (* (Util.do_then
+        *  (Util.do_then_error
+        *     (Type_infer.analyze_result
+        *        env
+        *        stdlib
+        *        (Type_infer.Expr.from_read_expr expr))
+        *     (fun typ ->
+        *       Printf.printf "Type: %s\n" (Type_infer.Type.to_string (new_env ()) typ);
+        *       Ok (Type_infer.Type.to_string (new_env ()) typ))
+        *     (fun error ->
+        *       (try raise error
+        *        with | Type_infer.ParseError e | Type_infer.TypeError e ->
+        *                Error e)))
+        *  (fun _typ ->
+        *    (match codegen_expr expr with
+        *     | Ok codegen_expr ->
+        *        (match cmdise codegen_expr with
+        *         | Ok program ->
+        *            Ok (Codegen.generate_program program)
+        *         | Error e -> Error (Util.str [ "cmdise expr error: "
+        *                                      ; e]))
+        *     | Error inner_err ->
+        *        Error (Util.str ["inner fail: "
+        *                        ;inner_err])))) *)
   | Error e ->
      Error (Util.str ["`Platoc.compile` Error: e: "
                      ;e])
@@ -277,7 +320,7 @@ let () =
                                                      ;out_path
                                                      ;" "
                                                      ;c_out_path
-                                                     ;" && rm " ;c_out_path
+                                                     (* ;" && rm " ;c_out_path *)
                                                      ;" && /tmp/plato_run_temp"]) in
      exit status_code;
   | Ok (_, PublishAndPrintIDFromSTDIN (_pos)) ->

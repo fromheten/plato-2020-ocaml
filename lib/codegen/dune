@@ -1,3 +1,4 @@
 (library
  (name codegen)
- (libraries util))
+ (libraries util yojson ppx_deriving_yojson.runtime)
+ (preprocess (pps ppx_deriving_yojson)))

@@ -34,6 +34,7 @@ Install the Plato platform by running `export PREFIX=/my/install/path && make in
 
 ## DONE
 
+* Nonrecursive let
 * Type checking
 * C code generation
 * Hammock time

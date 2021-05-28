@@ -6,6 +6,7 @@ depends: [
   "ounit2" {>= "2.2.4"}
   "alcotest" {>= "1.2.3"}
   "odoc" {with-doc}
+  "ppx_deriving_yojson" {= "3.6.1"}
 ]
 build: [
   ["dune" "subst"] {dev}

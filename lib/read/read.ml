@@ -40,6 +40,8 @@ type expr =
   | Ann of position * typ * expr
   | Dict of position * (expr * expr) list
   | Match of position * expr * (expr pattern * expr) list
+  | Let of position * string * expr * expr
+  | Letrec of position * string * expr * expr
 
 let char_list s =
   let rec exp i l =
@@ -385,14 +387,9 @@ let n_or_more_tests =
    , n_or_more
        4
        (literal "a")
-       (0 ,(char_list "   aabaaaa "))
+       (0 ,(char_list "   aaaaaa "))
      = Ok ((9, [' '])
-	  ,[(); (); (); (); (); ()]))
-   (* ;("andThen literals"
-    *     ,(andThen (literal "(")
-    *         (literal "λ")) (char_list " (λ x x)")
-    *      =
-    * ) *)]
+	  ,[(); (); (); (); (); ()]))]
 
 let orElse p0 p1 (source: source) =
   match p0 source with
@@ -755,29 +752,30 @@ let application
              ,appise (List.rev xs)))))
     source
 
-(* let let_expr expression: source ->  expr parseresult =
- *   (map
- *      (andThen
- * 					   (andThen
- * 								   (andThen
- * 											   (andThen
- * 														   (literal "(")
- * 														   (literal "let"))
- * 											   (n_or_more 1
- * 														   (andThen
- * 																	   (pattern expression)
- * 																	   expression)))
- * 								   expression)
- * 					   (literal ")"))
- *      (Util.take_ok
- *         (fun
- *            ((end_index, rest)
- *            ,(((((), ()),
- *                bindings),
- *               body),
- *              ())) ->
- *           ((end_index, rest)
- *           ,(expand_let body bindings))))) *)
+let let_expr expression source: expr parseresult =
+  (map
+     (andThen
+	(andThen
+	   (andThen
+	      (andThen
+		 (literal "(")
+		 (literal "let"))
+	      (andThen
+		 (pattern expression)
+		 expression))
+	   expression)
+	(literal ")"))
+     (Util.take_ok
+        (function
+         | ((end_index, rest)
+           ,(((((), ()),
+               (PSym (_psym_pos, name), definition)),
+              body),
+             ())) ->
+            ((end_index, rest)
+            ,Let ((fst source, end_index), name, definition, body))
+         | _ -> failwith "let_expr with non-PSym definition - fix this")))
+  source
 
 let dict expression source =
   (map (andThen
@@ -823,7 +821,7 @@ let rec expression (source_code: source): expr parseresult =
     ; lambda expression
     ; deep_lambda expression
     ; annotation expression
-    (* ; let_expr expression *)
+    ; let_expr expression
     (* ; tagged_expr expression *)
     ; match_expr expression
     ; application expression]
@@ -1016,6 +1014,16 @@ let string_of_pattern string_of_value = function
      @ [')']
 
 let rec string_of_expr = function
+  | Let (_pos, name, definition, body) ->
+     char_list (Printf.sprintf "(let %s %s\n  %s)"
+                  name
+                  (string_of_char_list (string_of_expr definition))
+                  (string_of_char_list (string_of_expr body)))
+  | Letrec (_pos, name, definition, body) ->
+     char_list (Printf.sprintf "(letrec %s %s\n  %s)"
+                  name
+                  (string_of_char_list (string_of_expr definition))
+                  (string_of_char_list (string_of_expr body)))
   | U8 (_pos, i) ->
      ['('; 'u'; '8';' ']
      @ char_list (string_of_int i)
