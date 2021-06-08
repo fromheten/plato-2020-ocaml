@@ -1,5 +1,4 @@
 (Log
- (string
-  (let f (λ p p)
-   (f ((λ passed (u8 123))
-       (λ x x))))))
+ (let f (λ p p)
+  (f ((λ passed "Success :)")
+      (λ x x)))))

@@ -93,7 +93,6 @@ struct value toString(struct value expr) {
             (long)expr.actual_value.lambda.ctx);
     return makeString(return_string);
   } else if (expr.type == U8) {
-    puts("DEBUG Gonna toString a U8");
     // Allocates storage
     ssize_t buffer_size = snprintf(NULL, 0, "%u", expr.actual_value.u8);
     char *return_string = (char*)malloc(buffer_size + 1);
@@ -101,8 +100,7 @@ struct value toString(struct value expr) {
     snprintf(return_string, buffer_size + 1, "%u", expr.actual_value.u8);
     return makeString(return_string);
   } else if (expr.type == STRING) {
-    puts("toString STRING");
-    return expr;
+		return expr;
   } else {
     puts("Bad! toString got something it does not recognize. Error in the compiler :o!");
     exit(1337);

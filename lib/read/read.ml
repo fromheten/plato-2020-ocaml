@@ -10,19 +10,6 @@ type id =
 type position = (* source position - index *)
   int * int
 
-type typ =
-  | TVar of position * id                  (* Machine generated vars - for inferring *)
-  | TSym of position * string              (* Same as a TVar, but man made *)
-  | TTerm of position * id * typ list
-  | TArrow of position * typ * typ
-  | TUnit of position
-  | TString of position
-  | TTuple of position * typ list
-  | TVector of position * typ
-  | TSet of position * typ
-  | TDict of position * typ * typ (* key * value *)
-  | TU8 of position
-
 type 'a pattern =
   | PSym of position * string
   | PTag of position * string * 'a
@@ -37,11 +24,43 @@ type expr =
   | Unit of position
   | Vector of position * expr list
   | Set of position * expr list
-  | Ann of position * typ * expr
+  | Ann of position * Type_infer.Type.t * expr
   | Dict of position * (expr * expr) list
   | Match of position * expr * (expr pattern * expr) list
   | Let of position * string * expr * expr
   | Letrec of position * string * expr * expr
+
+let rec from_read_expr read_expr =
+  match read_expr with
+  | Lam (_pos, (PSym (_psym_pos, pattern), expr) :: _pattern_expr_rest) ->
+    Type_infer.Expr.Lambda (pattern, from_read_expr expr)
+  | Lam (_pos, _patterns_exprs) ->
+    failwith "Currently I can only convert Lam with a PSym"
+  (* | App (_pos, Sym (_, "Log"), _e1) ->
+     *    failwith "Can't yet type check Commands" *)
+  | App (_pos, e0, e1) ->
+    Apply (from_read_expr e0, from_read_expr e1)
+  | Sym (_pos, x) ->
+    Ident x
+  | U8 (_pos, n) -> U8 n
+  | String (_pos, text) -> String text
+  | Tuple (_pos, _exprs) -> failwith "from of Tuple not possible"
+  | Unit _pos -> Unit
+  | Vector (_pos, _exprs) -> failwith "from of Vector not possible"
+  | Set (_pos, _exprs) -> failwith "from of Set not possible"
+  | Ann (_pos, t, expr) -> Type_infer.Expr.Annotation (t, from_read_expr expr)
+  | Dict (_pos, _exprs) -> failwith "from of Dict not possible"
+  | Match (_pos, _x, _patterns_exprs) -> failwith "from of Match not possibl"
+  | Let (_pos, x, definition, body) -> Let (x
+                                           ,(from_read_expr
+                                               definition)
+                                           ,(from_read_expr
+                                               body))
+  | Letrec (_pos, x, definition, body) -> Letrec (x
+                                                 ,(from_read_expr
+                                                     definition)
+                                                 ,(from_read_expr
+                                                     body))
 
 let char_list s =
   let rec exp i l =
@@ -606,15 +625,14 @@ let lambda_tests =
                   Lam ((12, 13)
                       ,[(PSym ((7, 8), "y"), Sym ((10, 11), "x"))]))])))]
 
-let tunit (source: source): typ parseresult =
+let tunit (source: source): Type_infer.Type.t parseresult =
   (map (andThen
           (literal "<")
           (literal ">"))
      (Util.take_ok
         (fun ((end_pos, rest), ((), ()))
          -> ((end_pos, rest)
-            ,TUnit (fst source
-                   ,end_pos)))))
+            ,Type_infer.my_Unit))))
     source
 
 let tunit_tests =
@@ -622,26 +640,25 @@ let tunit_tests =
    ,tunit (0
           ,['<'; '>'])
     = Ok ((2,[])
-         ,TUnit (0, 2)))]
+         ,Type_infer.my_Unit))]
 
-let ttuple (typ: source -> typ parseresult) source: typ parseresult =
+let ttuple (typ: source -> Type_infer.Type.t parseresult) source: Type_infer.Type.t parseresult =
   (map (andThen (andThen (literal "<")
                    (n_or_more 1 typ))
           (literal ">"))
      (Util.take_ok
         (fun ((end_pos, rest)
              ,(((), members), ())) ->
-          ((end_pos, rest), TTuple ((fst source, end_pos), members)))))
+          ((end_pos, rest), (Type_infer.my_Tuple members)))))
     source
 
 let ttuple_tests =
   [("ttuple ttuple ttuple"
    , ttuple tunit (0, (char_list "< <>  <> > ]"))
      = Ok ((9, [' ';']'])
-          ,TTuple ((0, 9)
-                  ,[TUnit (2, 4); TUnit (7, 9)])))]
+          ,Type_infer.my_Tuple [Type_infer.my_Unit; Type_infer.my_Unit]))]
 
-let tarrow (typ: source -> typ parseresult) source : typ parseresult =
+let tarrow (typ: source -> Type_infer.Type.t parseresult) source : Type_infer.Type.t parseresult =
   (map (andThen (andThen (andThen
                             (literal "(")
                             (literal "->"))
@@ -652,28 +669,34 @@ let tarrow (typ: source -> typ parseresult) source : typ parseresult =
           let rec arrowise = function
             | t :: [] -> t
             | t :: rest ->
-               TArrow ((fst source
-                       ,end_pos)
-                      ,arrowise rest
-                      ,t)
+              (Type_infer.Function.create t (arrowise rest))
             | [] -> failwith "arrowise should not get empty input"
           in ((end_pos, rest)
-             ,arrowise (List.rev the_types)))))
+             ,arrowise the_types))))
     source
 
-let tsym = (map (orElse symbol quoted_symbol)
-              (function
-               | Ok (rest, Sym (pos, s)) ->
-                  Ok (rest, TSym (pos, s))
-               | _ -> Error "Not a symbol"))
+let tsym global_env source: Type_infer.Type.t parseresult =
+  (map (orElse symbol quoted_symbol)
+     (function
+       | Ok ((rest, index), Sym (_pos, s)) ->
+         Ok ((rest, index),
+             Type_infer.Type.TyVar
+               (let tv = Type_infer.TypeVariable.create global_env in
+                tv.name <- s;
+                tv))
+       | _ -> Error "Not a symbol"))
+  source
 
+let tu8: source -> 'a parseresult =
+  (map
+     (literal "U8")
+     (Util.take_ok (fun (state, ()) -> (state, Type_infer.my_U8))))
 
-let rec typ src =
-  (orElse
-     tsym
-     (orElse
-        (tarrow typ)
-        tunit))
+let rec typ global_env src : Type_infer.Type.t parseresult =
+  (orElse_list [tarrow (typ global_env)
+               ;tunit
+               ;tu8
+               ;tsym global_env])
     src
 
 let unit source: expr parseresult =
@@ -685,27 +708,28 @@ let unit source: expr parseresult =
           ,Unit (fst source, end_pos)))))
     source
 
-let u8 = (map
-            (andThen
-    				       (andThen (andThen
-    																       (literal "(")
-    																       (literal "u8"))
-    							       symbol)
-    				       (literal ")"))
-            (function
-             | Ok ((src_end_pos, src_rest)
-                  ,((((), ())
-                    ,Sym ((sym_start_pos, sym_end_pos), name)), ())) ->
-                (match int_of_string_opt name with
-                 | Some n ->
-                    Ok ((src_end_pos, src_rest)
-                       ,U8 ((sym_start_pos, sym_end_pos)
-                           ,n))
-                 | None -> Error (Util.str ["Failiig to parse u8: "
-                                           ;name]))
-             | Error e ->
-                Error e
-             | _ -> failwith "nopez seniorez"))
+let u8 =
+  (map
+     (andThen
+    	(andThen (andThen
+    		    (literal "(")
+    		    (literal "u8"))
+    	   symbol)
+    	(literal ")"))
+     (function
+       | Ok ((src_end_pos, src_rest)
+            ,((((), ())
+              ,Sym ((sym_start_pos, sym_end_pos), name)), ())) ->
+         (match int_of_string_opt name with
+          | Some n ->
+            Ok ((src_end_pos, src_rest)
+               ,U8 ((sym_start_pos, sym_end_pos)
+                   ,n))
+          | None -> Error (Util.str ["Failiig to parse u8: "
+                                    ;name]))
+       | Error e ->
+         Error e
+       | _ -> failwith "nopez seniorez"))
 
 let tuple
       (expression: source -> expr parseresult)
@@ -720,11 +744,11 @@ let tuple
           ,Tuple ((fst source, end_pos), children)))))
     source
 
-let annotation  (expression: source -> expr parseresult) source : expr parseresult =
+let annotation gensym_env (expression: source -> expr parseresult) source : expr parseresult =
   (map (andThen (andThen (andThen (andThen
                                      (literal "(")
                                      (literal ":"))
-                            typ)
+                            (typ gensym_env))
                    expression)
           (literal ")"))
      (Util.take_ok (fun ((end_pos, rest), (((((), ()), t), e), ())) ->
@@ -807,7 +831,8 @@ let match_expr expression source =
           ,Match ((fst source, pos), expr, expr_pattern_expr_list)))))
     source
 
-let rec expression (source_code: source): expr parseresult =
+let rec expression gensym_env (source_code: source): expr parseresult =
+  let expression = expression gensym_env in
   orElse_list
     [ u8
     ; tuple expression
@@ -820,7 +845,7 @@ let rec expression (source_code: source): expr parseresult =
     ; set expression
     ; lambda expression
     ; deep_lambda expression
-    ; annotation expression
+    ; annotation gensym_env expression
     ; let_expr expression
     (* ; tagged_expr expression *)
     ; match_expr expression
@@ -828,130 +853,6 @@ let rec expression (source_code: source): expr parseresult =
     source_code
 
 let negpos = (-1, -1)
-
-let expression_tests =
-  [ ( "Why does this symbol not end at the space?"
-    , expression (0, (char_list "hello#{}#"))
-      = Ok ((5,['#'; '{'; '}'; '#'])
-           ,Sym ((0, 5), "hello")))
-  ; ( "Set of stuff"
-    , expression (0, (char_list "#{ hello there}#"))
-      = Ok ((16, []),
-            Set ((0, 16), [Sym ((3, 8), "hello"); Sym ((9, 14), "there")])))
-  ; ( "Set of vector"
-    , expression (0, (char_list "#{ []}# "))
-      = Ok ((7, [' ']), Set ((0, 7), [Vector ((2, 5), [])])))
-  ; ( "Unit"
-    , expression (0, (char_list "  <> "))
-      = Ok ((4, [' ']), Unit (0, 4)))
-  ; ( "Full tuple"
-    , expression (0, char_list "<hello <>> ")
-      = Ok ((10, [' '])
-           ,Tuple ((0, 10), [Sym ((1, 6), "hello"); Unit (6, 9)])))
-  ; ("parse K"
-    , expression (0, char_list "(λ x (λ y x))")
-      = Ok
-          ((15, []),
-           Lam ((0, 15),
-                [(PSym ((4, 5), "x"),
-                  Lam ((5, 14), [(PSym ((10, 11), "y"), Sym ((12, 13), "x"))]))])))
-  ; ("Annotate Unit"
-    , expression (0, char_list "(: <> <>)")
-      = Ok ((9, [])
-           ,Ann ((0, 9)
-                ,TUnit (2, 5)
-                ,Unit (5, 8))))
-  ; ("Deep λ"
-    , expression (0, char_list "(λ [x y] x)")
-      = Ok ((12, []),
-            Lam ((12, 13),
-                 [(PSym ((5, 6), "x"),
-                   Lam ((12, 13), [(PSym ((7, 8), "y"), Sym ((10, 11), "x"))]))])))
-  ; ("Advanced K annotation"
-    , expression (0, char_list "(: (-> X Y X) (λ [x y] x))")
-      = Ok
-          ((27, []),
-           Ann ((0, 27),
-                TArrow ((2, 13),
-                        TArrow ((2, 13), TSym ((7, 8), "X"), TSym ((9, 10), "Y")),
-                        TSym ((11, 12), "X")),
-                Lam ((26, 27),
-                     [(PSym ((19, 20), "x"),
-                       Lam ((26, 27)
-                           ,[(PSym ((21, 22), "y"), Sym ((24, 25), "x"))]))]))))
-  ; ("Apply annotated K"
-    , expression (0, char_list "((: (-> X Y X) (λ [x y] x)) 音 '沈黙')")
-      = Ok
-          ((41, []),
-           App ((0, 41),
-                App ((0, 41),
-                     Ann ((1, 28),
-                          TArrow ((3, 14),
-                                  TArrow ((3, 14), TSym ((8, 9), "X"), TSym ((10, 11), "Y")),
-                                  TSym ((12, 13), "X")),
-                          Lam ((27, 28),
-                               [(PSym ((20, 21), "x"),
-                                 Lam ((27, 28), [(PSym ((22, 23), "y"), Sym ((25, 26), "x"))]))])),
-                     Sym ((29, 32), "音")),
-                Sym ((33, 40), "沈黙"))))
-
-  ; ( "FAILURE?? Nested applications happen in order"
-    , application expression (0, char_list "(x (y z) (a b) c)")
-      = Ok
-          ((17, []),
-           App ((0, 17),        (* (((x (y z))) (a b) c) *)
-                App ((0, 17),
-                     App ((0, 17), Sym ((1, 2), "x"),
-                          App ((2, 8), Sym ((4, 5), "y"), Sym ((6, 7), "z"))),
-                     App ((8, 14), Sym ((10, 11), "a"), Sym ((12, 13), "b"))),
-                Sym ((15, 16), "c"))))
-  ; ("Strings are parsed as expressions"
-    , expression (0, char_list "  \"Hello\"  ")
-      = Ok ((7, [' '; ' ']), String ((2, 7), "Hello")))
-  ; ("Application and typ vars"
-    , expression (0, char_list "((λ x (λ y x)) \"first\" \"second\")")
-      = Ok ((30, []),
-            App ((0, 30),
-                 App ((0, 30),
-                      Lam ((1, 16),
-                           [(PSym ((5, 6), "x"),
-                             Lam ((6, 15), [(PSym ((11, 12), "y"), Sym ((13, 14), "x"))]))]),
-                      String ((17, 22), "first")),
-                 String ((23, 29), "second"))))
-  ; ("parse u8"
-    , expression (0, char_list "  (u8 1337)")
-      = Ok ((11, [])
-           ,U8 ((6, 10), 1337)))
-  ; ("You know what they say about men with large vocabularies? They also have a large Dict"
-    , dict expression (0, char_list "{\"ichi\" 1 \"ni\" 2 \"san\" 3}")
-      = Ok ((19, []),
-            Dict ((0, 19),
-                  [(String ((1, 5), "ichi"), Sym ((6, 7), "1"));
-                   (String ((8, 10), "ni"), Sym ((11, 12), "2"));
-                   (String ((13, 16), "san"), Sym ((17, 18), "3"))])))]
-
-let typ_tests =
-  [ ( "(-> (-> <> <>) (-> <> <>))"
-    , typ (0, char_list "(-> (-> <> <>) (-> <> <>  ))")
-      = Ok
-          ((28, []),
-           TArrow ((0, 28)
-                  ,TArrow ((3, 14)
-                          ,TUnit (7, 10)
-                          ,TUnit (10, 13)),
-                  TArrow ((14, 27)
-                         ,TUnit (18, 21)
-                         ,TUnit (21, 24)))))
-  ; ("Longbow arrows"
-    , typ (0, char_list "(-> X Y X)")
-      = Ok
-          ((10, []),
-           TArrow ((0, 10)
-                  ,TArrow ((0, 10)
-                          ,TSym ((4, 5) ,"X")
-                          ,TSym ((6, 7) ,"Y")),
-                  TSym ((8, 9)
-                       ,"X"))))]
 
 let comp f g x = f (g x)
 
@@ -963,46 +864,6 @@ let string_of_sym s =
   then ['"'] @ s_list @ ['"']
   else s_list
 
-let rec string_of_typ = function
-  | TSym (_pos, s) ->
-     string_of_sym s
-  | TUnit _pos ->
-     char_list "<>"
-  | TString _pos ->
-     char_list "String"
-  | TVar (_pos, n) ->
-     char_list "(TVar "
-     @ char_list (string_of_int n)
-     @ char_list ")"
-  | TTuple (_pos, t) ->
-     char_list "<"
-     @ List.concat (List.map string_of_typ t)
-     @ char_list ">"
-  | TArrow (_pos, t0, t1) ->
-     char_list "(-> "
-     @ string_of_typ t0
-     @ char_list " "
-     @ string_of_typ t1
-     @ char_list ")"
-  | TVector (_pos, t) ->
-     char_list "["
-     @ string_of_typ t
-     @ char_list "]"
-  | TSet (_pos, t) ->
-     char_list "#{"
-     @ string_of_typ t
-     @ char_list "}#"
-  | TDict (_pos, key_t, value_t) ->
-     char_list "{"
-     @ string_of_typ key_t
-     @ char_list " "
-     @ string_of_typ value_t
-     @ char_list "}"
-  | TU8 _pos ->
-     char_list "U8"
-  | TTerm (_pos, _, _) ->
-     failwith "Terms are sacred"
-
 let string_of_pattern string_of_value = function
   | PSym (_pos, s) ->
      string_of_sym s
@@ -1013,17 +874,18 @@ let string_of_pattern string_of_value = function
      @ string_of_value value
      @ [')']
 
-let rec string_of_expr = function
+let rec string_of_expr gensym_env =
+  function
   | Let (_pos, name, definition, body) ->
      char_list (Printf.sprintf "(let %s %s\n  %s)"
                   name
-                  (string_of_char_list (string_of_expr definition))
-                  (string_of_char_list (string_of_expr body)))
+                  (string_of_char_list (string_of_expr gensym_env definition))
+                  (string_of_char_list (string_of_expr gensym_env body)))
   | Letrec (_pos, name, definition, body) ->
      char_list (Printf.sprintf "(letrec %s %s\n  %s)"
                   name
-                  (string_of_char_list (string_of_expr definition))
-                  (string_of_char_list (string_of_expr body)))
+                  (string_of_char_list (string_of_expr gensym_env definition))
+                  (string_of_char_list (string_of_expr gensym_env body)))
   | U8 (_pos, i) ->
      ['('; 'u'; '8';' ']
      @ char_list (string_of_int i)
@@ -1039,68 +901,204 @@ let rec string_of_expr = function
                     [['(']
                     ;char_list name
                     ;[' ']
-                    ;string_of_expr child
+                    ;string_of_expr gensym_env child
                     ;[')']
                     ;[' ']
-                    ;string_of_expr expr]
+                    ;string_of_expr gensym_env expr]
                  | (PSym (_psym_pos, x) ,expr) ->
-                    [string_of_expr (Sym (_psym_pos, x))
+                    [string_of_expr gensym_env (Sym (_psym_pos, x))
                     ;[' ']
-                    ;string_of_expr expr]
+                    ;string_of_expr gensym_env expr]
                )
                patterns_exprs))
      @ [')']
   | App (_pos, e0, e1) ->
      ['(']
-     @ string_of_expr e0
+     @ string_of_expr gensym_env e0
      @ [' ']
-     @ string_of_expr e1
+     @ string_of_expr gensym_env e1
      @ [')']
   | Match (_pos, x, cases) ->
      ['(']
      @ char_list "match "
-     @ string_of_expr x
+     @ string_of_expr gensym_env x
      @ List.concat
          (List.map (fun (pattern, expr) ->
               [' ']
-            @ string_of_pattern string_of_expr pattern
+              @ string_of_pattern (string_of_expr gensym_env) pattern
             @ [' ']
-            @ string_of_expr expr)
+            @ string_of_expr gensym_env expr)
             cases)
      @ [')']
   | String (_pos, s) ->
      ['"'] @ char_list s @ ['"']
   | Tuple (_pos, exprs) ->
      ['<']
-     @ List.concat (List.map string_of_expr exprs)
+     @ List.concat (List.map (string_of_expr gensym_env) exprs)
      @ ['>']
   | Unit _pos ->
      ['<'; '>']
   | Vector (_pos, exprs) ->
      ['[']
-     @ List.concat (List.map string_of_expr exprs)
+     @ List.concat (List.map (string_of_expr gensym_env) exprs)
      @ [']']
   | Set (_pos, exprs) ->
      ['#'; '{']
-     @ List.concat (List.map string_of_expr exprs)
+     @ List.concat (List.map (string_of_expr gensym_env) exprs)
      @ ['}'; '#']
   | Ann (_pos, t, e) ->
      char_list "(Ann "
-     @ string_of_typ t
+     @ char_list (Type_infer.Type.to_string gensym_env t)
      @ char_list " "
-     @ string_of_expr e
+     @ string_of_expr gensym_env e
   | Dict (_pos, keys_and_vals) ->
      char_list "{"
      @ List.concat
          (List.map
-            (fun (key, value) -> string_of_expr key @ string_of_expr value @ char_list "\n ")
+            (fun (key, value) -> string_of_expr gensym_env key
+                                 @ string_of_expr gensym_env value
+                                 @ char_list "\n ")
             keys_and_vals)
      @ char_list "}"
 
+let expression_tests =
+  [ ( "Why does this symbol not end at the space?"
+    , expression (Type_infer.new_env ()) (0, (char_list "hello#{}#"))
+      = Ok ((5,['#'; '{'; '}'; '#'])
+           ,Sym ((0, 5), "hello")))
+  ; ( "Set of stuff"
+    , expression (Type_infer.new_env ()) (0, (char_list "#{ hello there}#"))
+      = Ok ((16, []),
+            Set ((0, 16), [Sym ((3, 8), "hello"); Sym ((9, 14), "there")])))
+  ; ( "Set of vector"
+    , expression (Type_infer.new_env ()) (0, (char_list "#{ []}# "))
+      = Ok ((7, [' ']), Set ((0, 7), [Vector ((2, 5), [])])))
+  ; ( "Unit"
+    , expression (Type_infer.new_env ()) (0, (char_list "  <> "))
+      = Ok ((4, [' ']), Unit (0, 4)))
+  ; ( "Full tuple"
+    , expression (Type_infer.new_env ()) (0, char_list "<hello <>> ")
+      = Ok ((10, [' '])
+           ,Tuple ((0, 10), [Sym ((1, 6), "hello"); Unit (6, 9)])))
+  ; ("parse K"
+    , expression (Type_infer.new_env ()) (0, char_list "(λ x (λ y x))")
+      = Ok
+          ((15, []),
+           Lam ((0, 15),
+                [(PSym ((4, 5), "x"),
+                  Lam ((5, 14), [(PSym ((10, 11), "y"), Sym ((12, 13), "x"))]))])))
+  ; ("Annotate Unit"
+    , expression (Type_infer.new_env ()) (0, char_list "(: <> <>)")
+      = Ok ((9, [])
+           ,Ann ((0, 9)
+                ,Type_infer.my_Unit
+                ,Unit (5, 8))))
+  ; ("Deep λ"
+    , expression (Type_infer.new_env ()) (0, char_list "(λ [x y] x)")
+      = Ok ((12, []),
+            Lam ((12, 13),
+                 [(PSym ((5, 6), "x"),
+                   Lam ((12, 13), [(PSym ((7, 8), "y"), Sym ((10, 11), "x"))]))])))
+  ; ("Advanced K annotation"
+    , expression (Type_infer.new_env ()) (0, char_list "(: (-> X Y X) (λ [x y] x))")
+      = Ok
+        ((27, []),
+         Ann ((0, 27),
+              Type_infer.Type.TyOp
+                ("->",
+                 [Type_infer.Type.TyVar
+                    {Type_infer.TypeVariable.id = 0; name = "X"; instance = None};
+                  Type_infer.Type.TyOp
+                    ("->",
+                     [Type_infer.Type.TyVar
+                        {Type_infer.TypeVariable.id = 1; name = "Y"; instance = None};
+                      Type_infer.Type.TyVar
+                        {Type_infer.TypeVariable.id = 2; name = "X"; instance = None}])]),
+              Lam ((26, 27),
+                   [(PSym ((19, 20), "x"),
+                     Lam ((26, 27), [(PSym ((21, 22), "y"), Sym ((24, 25), "x"))]))]))))
+  ; ("Apply annotated K"
+    , expression (Type_infer.new_env ()) (0, char_list "((: (-> X Y X) (λ [x y] x)) 音 '沈黙')")
+      = Ok
+        ((41, []),
+         App ((0, 41),
+              App ((0, 41),
+                   Ann ((1, 28),
+                        Type_infer.Type.TyOp
+                          ("->",
+                           [Type_infer.Type.TyVar
+                              {Type_infer.TypeVariable.id = 0; name = "X"; instance = None};
+                            Type_infer.Type.TyOp
+                              ("->",
+                               [Type_infer.Type.TyVar
+                                  {Type_infer.TypeVariable.id = 1; name = "Y"; instance = None};
+                                Type_infer.Type.TyVar
+                                  {Type_infer.TypeVariable.id = 2; name = "X"; instance = None}])]),
+                        Lam ((27, 28),
+                             [(PSym ((20, 21), "x"),
+                               Lam ((27, 28), [(PSym ((22, 23), "y"), Sym ((25, 26), "x"))]))])),
+                   Sym ((29, 32), "音")),
+              Sym ((33, 40), "沈黙"))))
+
+  ; ( "FAILURE?? Nested applications happen in order"
+    , application (expression (Type_infer.new_env ())) (0, char_list "(x (y z) (a b) c)")
+      = Ok
+          ((17, []),
+           App ((0, 17),        (* (((x (y z))) (a b) c) *)
+                App ((0, 17),
+                     App ((0, 17), Sym ((1, 2), "x"),
+                          App ((2, 8), Sym ((4, 5), "y"), Sym ((6, 7), "z"))),
+                     App ((8, 14), Sym ((10, 11), "a"), Sym ((12, 13), "b"))),
+                Sym ((15, 16), "c"))))
+  ; ("Strings are parsed as expressions"
+    , expression (Type_infer.new_env ()) (0, char_list "  \"Hello\"  ")
+      = Ok ((7, [' '; ' ']), String ((2, 7), "Hello")))
+  ; ("Application and typ vars"
+    , expression (Type_infer.new_env ()) (0, char_list "((λ x (λ y x)) \"first\" \"second\")")
+      = Ok ((30, []),
+            App ((0, 30),
+                 App ((0, 30),
+                      Lam ((1, 16),
+                           [(PSym ((5, 6), "x"),
+                             Lam ((6, 15), [(PSym ((11, 12), "y"), Sym ((13, 14), "x"))]))]),
+                      String ((17, 22), "first")),
+                 String ((23, 29), "second"))))
+  ; ("parse u8"
+    , expression (Type_infer.new_env ()) (0, char_list "  (u8 1337)")
+      = Ok ((11, [])
+           ,U8 ((6, 10), 1337)))
+  ; ("You know what they say about men with large vocabularies? They also have a large Dict"
+    , dict (expression (Type_infer.new_env ())) (0, char_list "{\"ichi\" 1 \"ni\" 2 \"san\" 3}")
+      = Ok ((19, []),
+            Dict ((0, 19),
+                  [(String ((1, 5), "ichi"), Sym ((6, 7), "1"));
+                   (String ((8, 10), "ni"), Sym ((11, 12), "2"));
+                   (String ((13, 16), "san"), Sym ((17, 18), "3"))])))]
+
+let typ_tests =
+  [("Longbow arrows"
+   , typ
+       (Type_infer.new_env ())
+       (0, char_list "(-> X Y X)")
+     = Ok
+       ((10, []),
+        Type_infer.Type.TyOp
+          ("->",
+           [Type_infer.Type.TyVar
+              {Type_infer.TypeVariable.id = 0; name = "X"; instance = None};
+            Type_infer.Type.TyOp
+              ("->",
+               [Type_infer.Type.TyVar
+                  {Type_infer.TypeVariable.id = 1; name = "Y"; instance = None};
+                Type_infer.Type.TyVar
+                  {Type_infer.TypeVariable.id = 2; name = "X"; instance = None}])])))]
+
+
 let src_to_src src =
   Util.take_ok
-    (Util.comp string_of_expr Util.second)
+    (Util.comp (string_of_expr (Type_infer.new_env ())) Util.second)
     (expression
+       (Type_infer.new_env ())
        (0, (char_list src)))
 
 let src_to_src_test src =
@@ -1109,7 +1107,9 @@ let src_to_src_test src =
 
 let string_of_expr_tests =
   [("string of quoted symbol"
-   ,string_of_expr (Sym ((0, 0), " I'm a quoted symbol"))
+   ,string_of_expr
+       (Type_infer.new_env ())
+       (Sym ((0, 0), " I'm a quoted symbol"))
     = (char_list "\" I'm a quoted symbol\""))
   ;("string of lambda"
    ,src_to_src "(λ x (λ y x))"

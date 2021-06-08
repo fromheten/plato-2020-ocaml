@@ -1,67 +1,3 @@
-module Expr = struct
-  type t =
-    | Ident of string
-    | Apply of t * t
-    | Lambda of string * t
-    | Let of string * t * t
-    | Letrec of string * t * t
-    | None
-    | U8 of int
-    | Unit
-    | String of string
-    | Annotation of t * t
-
-  let rec from_read_expr read_expr =
-    match read_expr with
-    | Read.Lam (_pos, (PSym (_psym_pos, pattern), expr) :: _pattern_expr_rest) ->
-       Lambda (pattern, from_read_expr expr)
-    | Lam (_pos, _patterns_exprs) ->
-       failwith "Currently I can only convert Lam with a PSym"
-    (* | App (_pos, Sym (_, "Log"), _e1) ->
-     *    failwith "Can't yet type check Commands" *)
-    | App (_pos, e0, e1) ->
-       Apply (from_read_expr e0, from_read_expr e1)
-    | Sym (_pos, x) ->
-       Ident x
-    | U8 (_pos, n) -> U8 n
-    | String (_pos, text) -> String text
-    | Tuple (_pos, _exprs) -> failwith "from of Tuple not possible"
-    | Unit _pos -> Unit
-    | Vector (_pos, _exprs) -> failwith "from of Vector not possible"
-    | Set (_pos, _exprs) -> failwith "from of Set not possible"
-    | Ann (_pos, _t, _expr) -> failwith "from of Ann not possible"
-    | Dict (_pos, _exprs) -> failwith "from of Dict not possible"
-    | Match (_pos, _x, _patterns_exprs) -> failwith "from of Match not possibl"
-    | Let (_pos, x, definition, body) -> Let (x
-                                             ,(from_read_expr
-                                                 definition)
-                                              ,(from_read_expr
-                                                  body))
-    | Letrec (_pos, x, definition, body) -> Letrec (x
-                                                   ,(from_read_expr
-                                                       definition)
-                                                   ,(from_read_expr
-                                                       body))
-
-  let rec to_string = function
-    | Ident s -> s
-    | Apply (fn, arg) ->
-       Printf.sprintf "(%s %s)" (to_string fn) (to_string arg)
-    | Lambda (v, body) ->
-       Printf.sprintf "(fun %s -> %s)" v (to_string body)
-    | Let (v, defn, body) ->
-       Printf.sprintf "(let %s = %s in %s)" v (to_string defn) (to_string body)
-    | Letrec (v, defn, body) ->
-       Printf.sprintf "(let rec %s = %s in %s)" v (to_string defn) (to_string body)
-    | None -> "None"
-    | U8 n -> string_of_int n
-    | String s -> "\"" ^ s ^ "\""
-    | Annotation (t, expr) -> Printf.sprintf "(Ann %s %s)"
-                                (to_string t)
-                                (to_string expr)
-    | Unit -> "<>"
-end
-
 let rec pow a = function
   | 0 -> 1
   | 1 -> a
@@ -107,7 +43,8 @@ module rec TypeVariable : sig
   let to_string global_env tv =
     match tv.instance with
     | None -> name global_env tv
-    | Some i -> Type.to_string global_env i
+    | Some typ ->
+      Type.to_string global_env typ
 
   let compare t1 t2 = t2.id - t1.id
   let hash tv = tv.id
@@ -149,7 +86,7 @@ end
             | TyTagUnion of (string * t) list
             | TyOp of TypeOperator.t
      let rec to_string global_env = function
-       | TyVar tv -> TypeVariable.to_string global_env tv
+       | TyVar tv -> TypeVariable.to_string global_env tv ^ "-" ^ string_of_int tv.id ^ tv.name
        | TyTag (tag, tagged_typ) ->
           "(" ^ tag ^ " " ^ to_string global_env tagged_typ ^ ")"
        | TyTagUnion cases ->
@@ -173,25 +110,50 @@ let rec zip xl yl =
   | ([], []) -> []
   | _ -> assert false
 
-(*  Basic types are constructed with a nullary type constructor  *)
-let my_U8 global_env =
-  (let arg_type = TypeVariable.create global_env in
-   let arg_type_param = Type.TyVar arg_type in
-   Function.create arg_type_param (Type.TyVar
-                                     (TypeVariable.create global_env)))
-(* (TypeOperator.create "U8" []) *)
-(* let my_String = Type.TyOp (TypeOperator.create "String" []) *)
-(* let my_String global_env =
- *   (let arg_type = TypeVariable.create global_env in
- *    let arg_type_param = Type.TyVar arg_type in
- *    Function.create arg_type_param (Type.TyVar
- *                                      (TypeVariable.create global_env))) *)
+let my_U8 = Type.TyOp (TypeOperator.create "U8" [])
 (* let my_Bool = Type.TyOp (TypeOperator.create "Bool" []) *)
 let my_String = Type.TyOp (TypeOperator.create "String" [])
 let my_Unit = Type.TyOp (TypeOperator.create "<>" [])
+let my_Tuple members = Type.TyOp (TypeOperator.create "Tuple" members)
+let my_Vector child = Type.TyOp (TypeOperator.create "Vector" [child])
+let my_Set members = Type.TyOp (TypeOperator.create "Set" [members])
 
 module TVSet = Set.Make(TypeVariable)
 (* module StringMap = Map.Make(String) *)
+
+module Expr = struct
+  type t =
+    | Ident of string
+    | Apply of t * t
+    | Lambda of string * t
+    | Let of string * t * t
+    | Letrec of string * t * t
+    | None
+    | U8 of int
+    | Unit
+    | String of string
+    | Annotation of Type.t * t
+
+  let rec to_string gensym_env e =
+    let to_string = to_string gensym_env in
+    match e with
+    | Ident s -> s
+    | Apply (fn, arg) ->
+       Printf.sprintf "(%s %s)" (to_string fn) (to_string arg)
+    | Lambda (v, body) ->
+       Printf.sprintf "(fun %s -> %s)" v (to_string body)
+    | Let (v, defn, body) ->
+       Printf.sprintf "(let %s = %s in %s)" v (to_string defn) (to_string body)
+    | Letrec (v, defn, body) ->
+       Printf.sprintf "(let rec %s = %s in %s)" v (to_string defn) (to_string body)
+    | None -> "None"
+    | U8 n -> string_of_int n
+    | String s -> "\"" ^ s ^ "\""
+    | Annotation (t, expr) -> Printf.sprintf "(Ann %s %s)"
+                                (Type.to_string gensym_env t)
+                                (to_string expr)
+    | Unit -> "<>"
+end
 
 exception ParseError of string
 exception TypeError of string
@@ -201,46 +163,44 @@ type analyze_error
   | TypeError of string
   | UnificationError of string
 
-let rec analyse global_env node (env: (string * Type.t) list) non_generic: Type.t =
+let rec analyse gensym_state node (env: (string * Type.t) list) non_generic: Type.t =
   match node with
-  | Expr.Ident name -> get_type global_env name env non_generic
+  | Expr.Ident name -> get_type gensym_state name env non_generic
   | Expr.Apply (fn, arg) ->
-     let fun_type = analyse global_env fn env non_generic in
-     let arg_type = analyse global_env arg env non_generic in
-     let result_type = TypeVariable.create global_env in
-     let result_type_param = Type.TyVar result_type in
-     unify global_env (Function.create arg_type result_type_param) fun_type;
+     let fun_type = analyse gensym_state fn env non_generic in
+     let arg_type = analyse gensym_state arg env non_generic in
+     let result_type_param = Type.TyVar (TypeVariable.create gensym_state) in
+     unify gensym_state (Function.create arg_type result_type_param) fun_type;
      result_type_param
   | Expr.Lambda (v, body) ->
-     let arg_type = TypeVariable.create global_env in
+     let arg_type = TypeVariable.create gensym_state in
      let arg_type_param = Type.TyVar arg_type in
      (* let new_env = StringMap.add v arg_type_param env in *)
      let new_env = (v, arg_type_param) :: env in
      let new_non_generic = TVSet.add arg_type non_generic in
-     let result_type = analyse global_env body new_env new_non_generic in
+     let result_type = analyse gensym_state body new_env new_non_generic in
      Function.create arg_type_param result_type
   | Expr.Let (v, defn, body) ->
-     let defn_type = analyse global_env defn env non_generic in
+     let defn_type = analyse gensym_state defn env non_generic in
      (* let new_env = StringMap.add v defn_type env in *)
      let new_env = (v, defn_type) :: env in
-     analyse global_env body new_env non_generic
+     analyse gensym_state body new_env non_generic
   | Expr.Letrec (v, defn, body) ->
-     let new_type = TypeVariable.create global_env in
+     let new_type = TypeVariable.create gensym_state in
      let new_type_param = Type.TyVar new_type in
      (* let new_env = StringMap.add v new_type_param env in *)
      let new_env = (v, new_type_param) :: env in
      let new_non_generic = TVSet.add new_type non_generic in
-     let defn_type = analyse global_env defn new_env new_non_generic in
-     unify global_env new_type_param defn_type;
-     analyse global_env body new_env non_generic
+     let defn_type = analyse gensym_state defn new_env new_non_generic in
+     unify gensym_state new_type_param defn_type;
+     analyse gensym_state body new_env non_generic
   | Expr.None -> assert false
   | Expr.U8 _n ->
-     let arg_type = TypeVariable.create global_env in
-     let arg_type_param = Type.TyVar arg_type in
-     Function.create arg_type_param (Type.TyVar
-                                       (TypeVariable.create global_env))
-  | Expr.Annotation (_t, _expr) ->
-     failwith "Can't do this Ann..."
+    my_U8
+  | Expr.Annotation (expected_typ, given_expr) ->
+    let given_expr_type = analyse gensym_state given_expr env non_generic in
+    unify gensym_state expected_typ given_expr_type;
+    given_expr_type
   | Expr.String _s -> my_String
   | Expr.Unit -> my_Unit
 
@@ -279,7 +239,7 @@ and get_type global_env name context non_generic =
          (List.assoc name context)
          non_generic
   else if is_integer_literal name
-  then my_U8 global_env
+  then my_U8
   else if context_contains_constructor context name
   then match (find_enum_matching_ctor context name) with
        | Some enum_type ->
@@ -327,20 +287,20 @@ and fresh global_env t non_generic: Type.t =
 
 (* Unify the two types t1 and t2
 Makes the types t1 and t2 the same *)
-and unify global_env t1 t2: unit =
+and unify gensym_state t1 t2: unit =
   let a = prune t1 in
   let b = prune t2 in
   match (a, b) with
-  | (Type.TyVar(tv), _) ->
+  | (Type.TyVar tyvar, _) ->
      if a <> b
      then begin
-         if occurs_in_type tv b
+         if occurs_in_type tyvar b
          then raise (TypeError "recursive unification")
-         else tv.TypeVariable.instance <- Some b
+         else tyvar.TypeVariable.instance <- Some b
        end
   | (_ (* Type.TyOp(_top) *)
-    , Type.TyVar(_tv)) ->
-     unify global_env b a
+    , Type.TyVar _tyvar) ->
+     unify gensym_state b a
   (* | (Type.TyOp (top1_name, top1_types), Type.TyTag (tytag_name, tytag_type)) -> *)
   (*
 (let Maybe (enum (Maybe a) (Just a) None)
@@ -356,38 +316,38 @@ TyEnum ("Maybe", ty_var "a", [Ty])
      if ((top1_name <> top2_name) || (top1_types_size <> top2_types_size))
      then raise (TypeError ("Type mismatch "
                             ^ (TypeOperator.to_string
-                                 global_env
+                                 gensym_state
                                  (top1_name, top1_types))
                             ^ " != "
                             ^ (TypeOperator.to_string
-                                 global_env
+                                 gensym_state
                                  (top2_name, top2_types))));
      (* Här kollar den bara om TypeOperators top1 och top2 är lika - men med OR behöver den också kolla om den ena är "child" till den andra, vilket är enkelt som att kolla om List.contains i den ena eller andras children. Kom ihåg, en typ = Sym of string | TypeOperator of string * typ list | TypeOperatorOr of string * typ list.
 
 Så (Maybe a) => (TypeOperatorOr "Maybe" [Sym "a"])
 Och (Just a) => (TypeOperator "Just" [Sym "a"])
 unify (Maybe a) (Just b) => (Maybe a)*)
-     List.iter2 (unify global_env) (top1_types) (top2_types)
+     List.iter2 (unify gensym_state) (top1_types) (top2_types)
 (* | _ -> raise (UnificationError "Not unified") *)
   | (Type.TyTagUnion (cases), Type.TyTag (tag_name, tag_typ))|
     (Type.TyTag (tag_name, tag_typ), Type.TyTagUnion (cases))->
      (match List.assoc_opt tag_name cases with
       | Some canonical_typ ->
          (* canonical type is what we expect - it should unify with tag_type *)
-         unify global_env canonical_typ tag_typ
+         unify gensym_state canonical_typ tag_typ
       | None -> raise (TypeError ("Union Tag mismatch "
-                                  ^ Type.to_string global_env (Type.TyTagUnion (cases))
+                                  ^ Type.to_string gensym_state (Type.TyTagUnion (cases))
                                   ^ "not matching "
-                                  ^ Type.to_string global_env tag_typ)))
+                                  ^ Type.to_string gensym_state tag_typ)))
   | (Type.TyOp (_, _), (Type.TyTag _|TyTagUnion _))|
       ((TyTag _|TyTagUnion _), TyOp (_, _)) ->
      raise (TypeError ("TyOp and TyTag|TyTagUnion don't unify"))
   | (Type.TyTag (t1_name, t1_typ), Type.TyTag (t2_name, t2_typ)) ->
      if t1_name = t2_name
-     then unify global_env t1_typ t2_typ
+     then unify gensym_state t1_typ t2_typ
      else raise (TypeError "Given two TyTag but they are not of the same tag name")
   | (TyTagUnion _, (TyTagUnion _)) ->
-     unify global_env a b
+     unify gensym_state a b
 
 and prune (t: Type.t) =
   match t with
@@ -416,7 +376,7 @@ and is_integer_literal name =
   with Failure _ -> false
 
 let try_exp global_env env node =
-  Printf.printf "%s: " (Expr.to_string node);
+  Printf.printf "%s: " (Expr.to_string global_env node);
   try print_endline (Type.to_string
                        global_env
                        (analyse

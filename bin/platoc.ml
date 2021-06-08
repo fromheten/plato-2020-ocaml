@@ -56,6 +56,7 @@ let rec codegen_expr: (Read.expr -> (Codegen.expr, string) result) = function
       | Ok def, Ok bod ->
          Ok (Codegen.Let (name, def, bod))
       | Error e, _| _, Error e -> Error e)
+  | Read.Ann (_pos, _t, e) -> codegen_expr e
   | _ -> failwith "can't convert this to codegen expression"
 
 let cmdise = function
@@ -72,8 +73,11 @@ Here is an example: `(Log your-program)`.
 cmdise can only handle programs that begin with applying Log"
 
 let compile (src: string): (string, string) result =
-  match Read.expression (0
-                        ,(Read.char_list src)) with
+  let gensym_env = (Type_infer.new_env ()) in
+  match Read.expression
+          gensym_env
+          (0
+          ,(Read.char_list src)) with
   | Ok (_rest, expr) ->
      let new_env () = (Type_infer.new_env ()) in
      let env = (new_env ()) in
@@ -91,7 +95,7 @@ let compile (src: string): (string, string) result =
         (match (Type_infer.analyze_result
                   env
                   stdlib
-                  (Type_infer.Expr.from_read_expr expr)) with
+                  (Read.from_read_expr expr)) with
          | Ok typ -> Printf.printf "\nType: %s\n" (Type_infer.Type.to_string (new_env ()) typ);
                      Ok (Type_infer.Type.to_string (new_env ()) typ)
          | Error e -> Error e) with
@@ -170,26 +174,6 @@ let compile_tests =
                     , Codegen.String "Hello first")
                  , Codegen.String "Bye!"))))]
 
-let workflow_tests =
-  [(let src = "(((λ [x y] x) (u8 1)) (u8 2))" in
-    let my_env = (Type_infer.new_env ()) in
-    let expect = Type_infer.Type.TyOp ("U8", []) in
-    let actual =
-      (match Read.expression (0, Read.char_list src) with
-       | Ok (_state, expr) ->
-          let type_expr = Type_infer.Expr.from_read_expr expr in
-          (match Type_infer.analyze_result my_env [] type_expr with
-           | Ok t -> Ok t
-           | Error _exn -> Error "Type check failure...")
-      | Error e -> Error e) in
-    (Util.str ["Parse and typecheck K applied. Should just be "
-              ;(Type_infer.Type.to_string my_env expect)
-              ;", actually: "
-              ;(match actual with
-                | Ok actual -> (Type_infer.Type.to_string my_env actual)
-                | Error e -> e)])
-    ,actual = Ok expect)]
-
 let test test_msg_pairs =
   test_msg_pairs
   |> List.map (fun (msg, test) ->
@@ -219,10 +203,7 @@ let print_tests_results =
     ; Read.string_tests
     ; Codegen.ocaml_import_tests
     ; compile_tests
-    ; workflow_tests
-    (* ; Unify.unify_tests *)
     ; Read.string_of_expr_tests
-    (* ; Unify.infer_tests *)
     ; Type_infer.type_infer_tests]
   |> test
 

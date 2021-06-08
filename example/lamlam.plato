@@ -1,5 +1,4 @@
 (Log
- (string
-  (((λ [x y] x)
-    (u8 1))
-   (u8 2))))
+ (((λ [x y] x)
+   "first")
+  "second"))

@@ -1,0 +1,5 @@
+(Log (let msg "Hello"
+      ((: (-> B C)
+          ((λ [x y] x)
+           msg))
+       "there")))
