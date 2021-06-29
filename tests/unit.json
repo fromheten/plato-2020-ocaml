@@ -1,0 +1,6 @@
+{
+  "command": "echo \"(Log (string <>))\" | dune exec bin/platoc.exe -- --stdin",
+  "stdout": "<>\nType: <>-3",
+  "stderr": "",
+  "exitCode": 0
+}

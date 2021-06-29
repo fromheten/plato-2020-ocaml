@@ -1,0 +1,6 @@
+{
+  "expression": "[\\\"hello\\\" \\\"vectors\\\"]",
+  "stdout": "[\"hello\" \"vectors\"]\nType: [String]-4",
+  "stderr": "",
+  "exitCode": 0
+}
