@@ -5,10 +5,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <gc.h>
+#include <rrb.h>
 
-/* #ifdef GC_H */
-/* puts("GC is ON!"); */
-/* #endif */
+#ifndef RRB_H
+bad error
+#endif
 
 typedef struct value (*lambdafn)();
 

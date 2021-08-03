@@ -297,9 +297,11 @@ let () =
       | Error e ->
          print_string (Util.str [ "Compilation Error: "
                                 ; e]));
-     let compile_command = (String.concat "" ["cc -o "
+     let prefix = "/Users/martin/code/plato-2020-ocaml/thirdparty/target" in
+     let compile_command = (String.concat "" [Printf.sprintf "LDFLAGS='-L%s/lib' CFLAGS='-I%s/include' " prefix prefix
+                                             ;"cc -o "
                                              ;out_path
-                                             ;" "
+                                             ;" -lgc -lrrb "
                                              ;c_out_path
                                              (* ;" && rm " ;c_out_path *)
                                              ;" && /tmp/plato_run_temp"]) in
