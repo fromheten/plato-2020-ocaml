@@ -75,3 +75,25 @@ let do_then_error x then_fn else_fn =
 
 let app fn x =
     fn x
+
+let all_ok results =
+  let rec inner acc rest =
+    match rest with
+    | Ok value :: rest ->
+      inner (value :: acc) rest
+    | Error e :: _rest ->
+      Error e
+    | [] ->
+      Ok acc in
+  inner [] results
+
+let string_of_in_channel (ch: in_channel) : string =
+  let rec inner acc =
+    try
+      let letter = really_input_string ch 1 in
+      inner (acc ^ letter)
+    with
+    | End_of_file -> acc in
+  inner ""
+
+let puts s = print_string s ; print_newline () ;

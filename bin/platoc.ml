@@ -297,12 +297,13 @@ let () =
       | Error e ->
          print_string (Util.str [ "Compilation Error: "
                                 ; e]));
-     let status_code = Sys.command (String.concat "" ["cc -o "
-                                                     ;out_path
-                                                     ;" "
-                                                     ;c_out_path
-                                                     (* ;" && rm " ;c_out_path *)
-                                                     ;" && /tmp/plato_run_temp"]) in
+     let compile_command = (String.concat "" ["cc -o "
+                                             ;out_path
+                                             ;" "
+                                             ;c_out_path
+                                             (* ;" && rm " ;c_out_path *)
+                                             ;" && /tmp/plato_run_temp"]) in
+     let status_code = Sys.command compile_command in
      exit status_code;
   | Ok (_, PublishAndPrintIDFromSTDIN (_pos)) ->
      (* print_string (Cryptokit.hash_channel (Cryptokit.Hash.sha3 512) Stdlib.stdin); *)

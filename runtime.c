@@ -4,6 +4,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <gc.h>
+
+/* #ifdef GC_H */
+/* puts("GC is ON!"); */
+/* #endif */
 
 typedef struct value (*lambdafn)();
 
