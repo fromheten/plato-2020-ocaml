@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <gc.h>
 #include <rrb.h>
+#include <sds.h>
 
 typedef struct value (*lambdafn)();
 
@@ -121,9 +122,26 @@ struct value toString(struct value expr) {
     snprintf(return_string, buffer_size + 1, "%u", expr.actual_value.u8);
     return makeString(return_string);
   } else if (expr.type == STRING) {
-		return expr;
+		return makeString(sdscat(sdscat(sdsnew("\""),
+																		expr.actual_value.string),
+														 "\""));
   } else if (expr.type == VECTOR) {
-		return makeString("VECTOR YOOOO");
+		sds acc = "";
+
+		uint32_t length = rrb_count(expr.actual_value.vector);
+		int i;
+		for (i = 0; i < length; i++) {
+			struct value* current_value = rrb_nth(expr.actual_value.vector, i);
+			char* spacer = " ";
+			sds current = sdsnew(toString(*current_value).actual_value.string);
+			acc = sdscat(
+				sdscat(current, " "),
+				acc);
+		}
+		sdsrange(acc, 0, -2);
+		acc = sdscat(sdsnew("["), acc);
+		acc = sdscat(acc, "]");
+		return makeString(acc);
 	} else {
     puts("Bad! toString got something it does not recognize. Error in the compiler :o!");
     exit(1337);

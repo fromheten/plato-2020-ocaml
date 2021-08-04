@@ -214,8 +214,6 @@ let rec analyse gensym_state node (env: (string * Type.t) list) non_generic: Typ
     let new_type = TypeVariable.create gensym_state in
     let new_type_param = Type.TyVar new_type in
     let xs_types = (List.map (fun expr -> analyse gensym_state expr env non_generic) xs) in
-    Printf.printf "%n" (List.length xs_types);
-    let _xxx = List.nth xs_types 0 in
     List.iter (fun ty ->
         unify gensym_state new_type_param ty;)
       (xs_types);

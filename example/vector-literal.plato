@@ -1,1 +1,2 @@
-(Log (string ["a" "b" "c" "d" "e"]))
+(Log (string
+      [["Så "] ["tåga "] [] [] ["vi "] [] ["tillsammans "] ["hän"]]))

@@ -247,36 +247,8 @@ let () =
      |> print_string
      |> print_newline
      |> print_newline
-  | Ok (_rest, Read.OutputExeToPath (_pos, io_paths)) ->
-     print_string "Compiling Plato to C...";
-     let src = Util.str (List.map
-                           Codegen.read_whole_file
-                           io_paths.input_files) in
-     print_string "DONE"; print_newline ();
-     (match compile src with
-      | Ok c_source ->
-         (let c_file = Util.str [io_paths.output_file
-                                ;".c"] in
-          (* Write C source to intermediate file *)
-          print_string (Util.str ["Writing C source to intermediate file ("
-                                 ;c_file
-                                 ;")..."]);
-          let out_channel = open_out c_file in        (* create or truncate file, return channel *)
-          Printf.fprintf out_channel "%s\n" c_source; (* write something *)
-          close_out out_channel;                      (* flush and close the channel *)
-          print_string "DONE"; print_newline ();
-          print_string "Compiling from C to binary...";
-          if (Sys.command (Util.str [ "cc "
-                                    ; c_file
-                                    ; " -o "
-                                    ; io_paths.output_file])) = 0
-          then (print_string "DONE"; print_newline ();)
-          else failwith "Failed compiling the output to native code executeable";
-         )
-      | Error e ->
-         print_string (Util.str [ "Compilation Error: "
-                                ; e]);
-         print_newline ())
+  | Ok (_rest, Read.OutputExeToPath (_pos, _io_paths)) ->
+     failwith "can't do this anymore"
   | Ok (_rest, Read.OutputCToPath (_pos, io_paths)) ->
      let src = Util.str (List.map
                            Codegen.read_whole_file
@@ -301,16 +273,21 @@ let () =
          Printf.fprintf oc "%s\n" c_source;
          close_out oc;
       | Error e ->
-         print_string (Util.str [ "Compilation Error: "
+        print_string (Util.str [ "Compilation Error: "
                                 ; e]));
      let prefix = "/Users/martin/code/plato-2020-ocaml/thirdparty/target" in
-     let compile_command = (String.concat "" [Printf.sprintf "LDFLAGS='-L%s/lib' CFLAGS='-I%s/include' " prefix prefix
-                                             ;"cc -o "
-                                             ;out_path
-                                             ;" -lgc -lrrb "
-                                             ;c_out_path
-                                             (* ;" && rm " ;c_out_path *)
-                                             ;" && /tmp/plato_run_temp"]) in
+     let compile_command = (String.concat
+                              ""
+                              [Printf.sprintf "LDFLAGS='-L%s/lib' CFLAGS='-I%s/include' " prefix prefix
+                              ;"cc -o "
+                              ;out_path
+                              (* ;" -v " *)
+                              ; " -I" ^ prefix ^ "/include "
+                              ; " -L" ^ prefix ^ "/lib "
+                              ;" -lgc -lrrb -lsds "
+                              ;c_out_path
+                              (* ;" && rm " ;c_out_path *)
+                              ;" && /tmp/plato_run_temp"]) in
      let status_code = Sys.command compile_command in
      exit status_code;
   | Ok (_, PublishAndPrintIDFromSTDIN (_pos)) ->
