@@ -7,10 +7,6 @@
 #include <gc.h>
 #include <rrb.h>
 
-#ifndef RRB_H
-bad error
-#endif
-
 typedef struct value (*lambdafn)();
 
 struct lambda /* closure */ {
@@ -22,12 +18,14 @@ struct lambda /* closure */ {
 union uvalue {
 	char* string;
 	unsigned char u8;
+	const RRB* vector;
 	struct lambda lambda;
 };
 
 enum runtime_type {
 	STRING,
 	U8,
+	VECTOR,
 	LAMBDA
 };
 
@@ -84,6 +82,23 @@ struct value makeU8(unsigned char i) { /* used to be int */
 	v->actual_value = *uv;
 	return *v;
 }
+
+struct value makeVector(const RRB* rrb) {
+	union uvalue* uv = (union uvalue*)malloc(sizeof(union uvalue));
+	struct value* v = (struct value*)malloc(sizeof(struct value));
+	uv->vector = rrb;
+	v->type = VECTOR;
+	v->actual_value = *uv;
+	return *v;
+}
+
+void * mallocValue(struct value v) {
+	struct value * ptr = malloc(sizeof(struct value));
+	ptr->type = v.type;
+	ptr->actual_value = v.actual_value;
+	return (void*) ptr;
+}
+
 struct value toString(struct value expr) {
   if (expr.type == LAMBDA) {
     ssize_t buffer_size =
@@ -107,7 +122,9 @@ struct value toString(struct value expr) {
     return makeString(return_string);
   } else if (expr.type == STRING) {
 		return expr;
-  } else {
+  } else if (expr.type == VECTOR) {
+		return makeString("VECTOR YOOOO");
+	} else {
     puts("Bad! toString got something it does not recognize. Error in the compiler :o!");
     exit(1337);
   };

@@ -57,6 +57,12 @@ let rec codegen_expr: (Read.expr -> (Codegen.expr, string) result) = function
          Ok (Codegen.Let (name, def, bod))
       | Error e, _| _, Error e -> Error e)
   | Read.Ann (_pos, _t, e) -> codegen_expr e
+  | Read.Vector (_pos, xs) ->
+    (match (Util.all_oks (List.map codegen_expr xs)) with
+     | Ok children ->
+       Ok (Codegen.Vector children)
+     | Error errs ->
+       failwith (String.concat "\n" errs))
   | _ -> failwith "can't convert this to codegen expression"
 
 let cmdise = function

@@ -133,6 +133,7 @@ module Expr = struct
     | Unit
     | String of string
     | Annotation of Type.t * t
+    | Vector of t list
 
   let rec to_string gensym_env e =
     let to_string = to_string gensym_env in
@@ -153,6 +154,12 @@ module Expr = struct
                                 (Type.to_string gensym_env t)
                                 (to_string expr)
     | Unit -> "<>"
+    | Vector xs ->
+      Printf.sprintf "[%s]" (Util.str
+                               (List.map
+                                  (Util.comp (fun x -> (Printf.sprintf "%s " x))
+                                     to_string)
+                                  xs))
 end
 
 exception ParseError of string
@@ -203,6 +210,16 @@ let rec analyse gensym_state node (env: (string * Type.t) list) non_generic: Typ
     given_expr_type
   | Expr.String _s -> my_String
   | Expr.Unit -> my_Unit
+  | Expr.Vector xs ->
+    let new_type = TypeVariable.create gensym_state in
+    let new_type_param = Type.TyVar new_type in
+    let xs_types = (List.map (fun expr -> analyse gensym_state expr env non_generic) xs) in
+    Printf.printf "%n" (List.length xs_types);
+    let _xxx = List.nth xs_types 0 in
+    List.iter (fun ty ->
+        unify gensym_state new_type_param ty;)
+      (xs_types);
+    my_Vector new_type_param
 
 and string_of_context env =
   let rec inner acc = function

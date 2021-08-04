@@ -46,7 +46,8 @@ let rec from_read_expr read_expr =
   | String (_pos, text) -> String text
   | Tuple (_pos, _exprs) -> failwith "from of Tuple not possible"
   | Unit _pos -> Unit
-  | Vector (_pos, _exprs) -> failwith "from of Vector not possible"
+  | Vector (_pos, exprs) ->
+    Type_infer.Expr.Vector (List.map from_read_expr exprs)
   | Set (_pos, _exprs) -> failwith "from of Set not possible"
   | Ann (_pos, t, expr) -> Type_infer.Expr.Annotation (t, from_read_expr expr)
   | Dict (_pos, _exprs) -> failwith "from of Dict not possible"

@@ -87,6 +87,19 @@ let all_ok results =
       Ok acc in
   inner [] results
 
+let all_oks results =
+  let rec inner results vals errs =
+    match results with
+    | Ok x :: rest ->
+      inner rest (x :: vals) errs
+    | Error e :: rest ->
+      inner rest vals (e :: errs)
+    | [] ->
+      if List.length errs = 0
+      then Ok vals
+      else Error errs
+  in inner results [] []
+
 let string_of_in_channel (ch: in_channel) : string =
   let rec inner acc =
     try

@@ -38,6 +38,7 @@ type expr =
   | Command of cmd
   | Tuple of expr list
   | Let of string * expr * expr
+  | Vector of expr list
 
 let generate_lambda generate lam_arg lam_body state =
   let current_lam_number = !state.lam_number in
@@ -179,7 +180,19 @@ You get from a tuple by matching `(match <1 2 3> <n0 n1 n2> n2)` => `3`
 
 Until I create match, I don't really have to allocate these
 "
-   | Command _ -> raise (GenerateError "A command should be applied"))
+   | Vector (children) ->
+     let rec fill_vector children acc =
+       (match children with
+        | child :: rest ->
+          fill_vector rest (Printf.sprintf
+                              "rrb_push(\n%s, \n mallocValue(%s))"
+                              acc
+                              (generate child state))
+        | [] -> acc
+       ) in
+     code := "makeVector(" ^ (fill_vector children "rrb_create()") ^ ")";
+     !code
+    | Command _ -> raise (GenerateError "A command should be applied"))
 
 let generate_program expression =
   let state = ref { lam_number = 0
