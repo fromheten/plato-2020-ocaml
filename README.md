@@ -8,6 +8,8 @@ Plato is built with Dune.
 
 Get all dependencies: `$ opam install --deps-only .`
 
+Get all runtime dependencies: `$ cd thirdparty && gmake all`
+
 To compile it, run `$ dune build bin/platoc.exe`
 
 To run a toplevel/repl, run `$ dune utop .`
@@ -17,7 +19,7 @@ To run a toplevel in Emacs/Tuareg mode, you want `C-c C-b dune utop . -- -emacs`
 ## Usage
 
 * Print tests `$ dune exec bin/platoc.exe --tests`
-* Compile and run a program `$ dune exec bin/platoc.exe -o ./out/main.c (Log "Hello") && cc -o ./out/a.out && ./out/a.out`
+  * Compile and run a program `$ dune exec ./bin/platoc.exe -- --run ./example/vector-literal.plato`
 
 ## Installation
 
@@ -26,14 +28,18 @@ Install the Plato platform by running `export PREFIX=/my/install/path && make in
 ## TODO
 
 * Structs
+* HAMT Immutable HashArrayMapTrie
 * Unions/Enums
+* CPS Conversion and Tail Call Elimination
 * Compile-time dependencies referred to by hash
 * Command based effects system
 * C FFI through the command based effects system
 * `libuv` integration into said effects system
+* Pattern Matching
 
 ## DONE
 
+* RRB Immutable Vectors
 * Nonrecursive let
 * Type checking
 * C code generation
