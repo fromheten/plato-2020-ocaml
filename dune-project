@@ -7,4 +7,6 @@
  (depends
   (cryptokit (>= 1.0.0))
   (ounit2 (>= 2.2.4))
-  (alcotest (>= 1.2.3))))
+  (alcotest (>= 1.2.3))
+  (yojson (= 1.7.0))
+  (ppx_deriving_yojson (= 3.6.1))))

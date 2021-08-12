@@ -21,6 +21,10 @@ To run a toplevel in Emacs/Tuareg mode, you want `C-c C-b dune utop . -- -emacs`
 * Print tests `$ dune exec bin/platoc.exe --tests`
   * Compile and run a program `$ dune exec ./bin/platoc.exe -- --run ./example/vector-literal.plato`
 
+### Docker
+
+You can easily build and run the compiler inside of Docker, by running `$ docker build -t platoc . && docker run -ti platoc /bin/sh`
+
 ## Installation
 
 Install the Plato platform by running `export PREFIX=/my/install/path && make install`.
@@ -39,6 +43,7 @@ Install the Plato platform by running `export PREFIX=/my/install/path && make in
 
 ## DONE
 
+* Dockerise compiler
 * RRB Immutable Vectors
 * Nonrecursive let
 * Type checking

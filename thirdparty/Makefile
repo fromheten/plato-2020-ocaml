@@ -1,6 +1,6 @@
 .PHONY: clean all
 
-PREFIX=/Users/martin/code/plato-2020-ocaml/thirdparty/target
+PREFIX=$(PWD)/thirdparty/target
 LD_C_FLAGS=LDFLAGS="-L$(PREFIX)/lib" CFLAGS='-I$(PREFIX)/include -Ofast'
 
 clean:
@@ -15,6 +15,7 @@ bdwgc/: libatomic_ops/
 
 target/include/gc.h: bdwgc/
 	echo $(PREFIX)
+	mkdir -p target/include target/lib build
 	cp -R bdwgc build/bdwgc
 	cd build/bdwgc && ./autogen.sh
 	cd build/bdwgc && ./configure --disable-dependency-tracking --disable-shared --prefix=$(PREFIX)
@@ -40,6 +41,7 @@ sds/:
 	git clone https://github.com/antirez/sds.git
 
 target/include/sds.h: sds/
+	mkdir -p target/include target/lib build/
 	cc -c sds/sds.c
 	ar -r sds.a sds.o
 	mv sds.a target/lib/libsds.a
