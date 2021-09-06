@@ -117,6 +117,7 @@ let my_Unit = Type.TyOp (TypeOperator.create "<>" [])
 let my_Tuple members = Type.TyOp (TypeOperator.create "Tuple" members)
 let my_Vector child = Type.TyOp (TypeOperator.create "Vector" [child])
 let my_Set members = Type.TyOp (TypeOperator.create "Set" [members])
+let my_Dict key value = Type.TyOp (TypeOperator.create "Dict" [key; value])
 
 module TVSet = Set.Make(TypeVariable)
 (* module StringMap = Map.Make(String) *)
@@ -134,6 +135,7 @@ module Expr = struct
     | String of string
     | Annotation of Type.t * t
     | Vector of t list
+    | Dict of (t * t) list
 
   let rec to_string gensym_env e =
     let to_string = to_string gensym_env in
@@ -160,6 +162,12 @@ module Expr = struct
                                   (Util.comp (fun x -> (Printf.sprintf "%s " x))
                                      to_string)
                                   xs))
+    | Dict kvs ->
+      Printf.sprintf "{%s}" (Util.str
+                               (List.map
+                                  (Util.comp (fun (k, v) -> (Printf.sprintf "%s %s" k v))
+                                     (fun (k, v) -> (to_string k, to_string v)))
+                                  kvs))
 end
 
 exception ParseError of string
@@ -218,6 +226,19 @@ let rec analyse gensym_state node (env: (string * Type.t) list) non_generic: Typ
         unify gensym_state new_type_param ty;)
       (xs_types);
     my_Vector new_type_param
+  | Expr.Dict key_value_pairs ->
+    let keys = List.map fst key_value_pairs in
+    let values = List.map snd key_value_pairs in
+    let unify_many (xs: Expr.t list): Type.t =
+      let new_type = TypeVariable.create gensym_state in
+      let new_type_param = Type.TyVar new_type in
+      let xs_types = (List.map (fun expr -> analyse gensym_state expr env non_generic) xs) in
+      List.iter (fun ty ->
+        unify gensym_state new_type_param ty;)
+        (xs_types);
+      new_type_param
+    in
+    my_Dict (unify_many keys) (unify_many values)
 
 and string_of_context env =
   let rec inner acc = function

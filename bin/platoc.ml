@@ -63,6 +63,13 @@ let rec codegen_expr: (Read.expr -> (Codegen.expr, string) result) = function
        Ok (Codegen.Vector children)
      | Error errs ->
        failwith (String.concat "\n" errs))
+  | Read.Dict (_pos, keys_values) ->
+    let keys = List.map fst keys_values in
+    let values = List.map snd keys_values in
+    (match (Util.all_oks (List.map codegen_expr keys), Util.all_oks (List.map codegen_expr values)) with
+     | (Ok keys, Ok values) ->
+       Ok (Codegen.Dict (List.combine keys values))
+     | _ -> failwith "Can't convert Dict to codegen expression")
   | _ -> failwith "can't convert this to codegen expression"
 
 let cmdise = function
@@ -278,16 +285,16 @@ let () =
      let prefix = "/Users/martin/code/plato-2020-ocaml/thirdparty/target" in
      let compile_command = (String.concat
                               ""
-                              [Printf.sprintf "LDFLAGS='-L%s/lib' CFLAGS='-I%s/include' " prefix prefix
-                              ;"cc -o "
-                              ;out_path
-                              (* ;" -v " *)
+                              [ Printf.sprintf "LDFLAGS='-L%s/lib' CFLAGS='-I%s/include' " prefix prefix
+                              ; "cc -o "
+                              ; out_path
+                              (* ; " -v " *)
                               ; " -I" ^ prefix ^ "/include "
                               ; " -L" ^ prefix ^ "/lib "
-                              ;" -lgc -lrrb -lsds "
-                              ;c_out_path
-                              (* ;" && rm " ;c_out_path *)
-                              ;" && /tmp/plato_run_temp"]) in
+                              ; " -lgc -lrrb -lsds "
+                              ; c_out_path
+                              (* ; " && rm " ;c_out_path *)
+                              ; " && /tmp/plato_run_temp"]) in
      let status_code = Sys.command compile_command in
      exit status_code;
   | Ok (_, PublishAndPrintIDFromSTDIN (_pos)) ->

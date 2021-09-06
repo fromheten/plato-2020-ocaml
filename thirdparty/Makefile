@@ -1,10 +1,13 @@
 .PHONY: clean all
 
-PREFIX=$(PWD)/thirdparty/target
+PREFIX=$(PWD)/target
+LDFLAGS="-L$(PREFIX)/lib"
+CFLAGS='-I$(PREFIX)/include'
+# LD_C_FLAGS=$(LDFLAGS) $(CFLAGS)
 LD_C_FLAGS=LDFLAGS="-L$(PREFIX)/lib" CFLAGS='-I$(PREFIX)/include -Ofast'
 
 clean:
-	rm -rf bdwgc/ libatomic_ops/ c-rrb/ sds/
+	rm -rf target/ build/ bdwgc/ libatomic_ops/ c-rrb/ sds/ hash-array-mapped-trie/
 
 libatomic_ops/:
 	git clone git://github.com/ivmai/libatomic_ops.git
@@ -48,4 +51,11 @@ target/include/sds.h: sds/
 	rm sds.o
 	cp sds/sds.h target/include/sds.h
 
-all: target/include/gc.h target/include/sds.h target/include/sds.h target/include/rrb.h
+hash-array-mapped-trie-poly/:
+	git clone https://github.com/fromheten/hash-array-mapped-trie-poly.git
+	cd hash-array-mapped-trie-poly && git checkout 2.0 && git log -n1
+
+target/include/hamt.h: hash-array-mapped-trie-poly/
+	cp hash-array-mapped-trie-poly/hamt.h $@
+
+all: target/include/gc.h target/include/sds.h target/include/sds.h target/include/rrb.h target/ target/include/hamt.h

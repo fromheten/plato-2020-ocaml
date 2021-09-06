@@ -50,7 +50,9 @@ let rec from_read_expr read_expr =
     Type_infer.Expr.Vector (List.map from_read_expr exprs)
   | Set (_pos, _exprs) -> failwith "from of Set not possible"
   | Ann (_pos, t, expr) -> Type_infer.Expr.Annotation (t, from_read_expr expr)
-  | Dict (_pos, _exprs) -> failwith "from of Dict not possible"
+  | Dict (_pos, exprs) -> Type_infer.Expr.Dict (List.map
+                                                  (fun (k, v) -> (from_read_expr k, from_read_expr v))
+                                                  exprs)
   | Match (_pos, _x, _patterns_exprs) -> failwith "from of Match not possibl"
   | Let (_pos, x, definition, body) -> Let (x
                                            ,(from_read_expr

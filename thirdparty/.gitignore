@@ -2,3 +2,5 @@ bdwgc
 libatomic_ops
 c-rrb
 sds
+hash-array-mapped-trie-poly
+target/*

@@ -19,7 +19,7 @@ To run a toplevel in Emacs/Tuareg mode, you want `C-c C-b dune utop . -- -emacs`
 ## Usage
 
 * Print tests `$ dune exec bin/platoc.exe --tests`
-  * Compile and run a program `$ dune exec ./bin/platoc.exe -- --run ./example/vector-literal.plato`
+* Compile and run a program `$ dune exec ./bin/platoc.exe -- --run ./example/vector-literal.plato`
 
 ### Docker
 
@@ -31,8 +31,7 @@ Install the Plato platform by running `export PREFIX=/my/install/path && make in
 
 ## TODO
 
-* Structs
-* HAMT Immutable HashArrayMapTrie
+* Structs/Records
 * Unions/Enums
 * CPS Conversion and Tail Call Elimination
 * Compile-time dependencies referred to by hash
@@ -40,6 +39,10 @@ Install the Plato platform by running `export PREFIX=/my/install/path && make in
 * C FFI through the command based effects system
 * `libuv` integration into said effects system
 * Pattern Matching
+
+## Partially done
+* DICT with HAMT Immutable HashArrayMapTrie
+Missing get, iterator, toString
 
 ## DONE
 

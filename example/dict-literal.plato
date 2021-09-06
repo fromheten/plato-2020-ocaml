@@ -1,0 +1,3 @@
+(Log (string
+      {(u8 123) "nice value"
+       (u8 234) "another nice value"}))

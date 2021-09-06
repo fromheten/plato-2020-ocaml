@@ -39,6 +39,7 @@ type expr =
   | Tuple of expr list
   | Let of string * expr * expr
   | Vector of expr list
+  | Dict of (expr * expr) list
 
 let generate_lambda generate lam_arg lam_body state =
   let current_lam_number = !state.lam_number in
@@ -192,7 +193,21 @@ Until I create match, I don't really have to allocate these
        ) in
      code := "makeVector(" ^ (fill_vector children "rrb_create()") ^ ")";
      !code
-    | Command _ -> raise (GenerateError "A command should be applied"))
+   | Dict keys_values ->
+     let rec fill_dict keys_values acc =
+       (match keys_values with
+        | (k, v) :: rest ->
+          fill_dict rest
+            (Printf.sprintf
+               "value_hamt_set(\n\t%s, \n\t%s, \n\t%s)"
+               acc
+               ("mallocValue(" ^ (generate k state) ^ ")")
+               ("mallocValue(" ^ (generate v state) ^ ")"))
+        | [] -> acc
+       ) in
+     code := "makeDict(" ^ (fill_dict keys_values "value_hamt_new()") ^ ")";
+     !code
+   | Command _ -> raise (GenerateError "A command should be applied"))
 
 let generate_program expression =
   let state = ref { lam_number = 0

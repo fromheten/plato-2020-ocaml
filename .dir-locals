@@ -1,0 +1,2 @@
+((c-mode   . ((mode . clang-format+)))
+ (c++-mode . ((mode . clang-format+))))
