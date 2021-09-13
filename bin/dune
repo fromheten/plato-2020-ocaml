@@ -1,6 +1,7 @@
 (executable
  (name platoc)
- (libraries read
+ (libraries expr
+            read
             util
             type_infer
             ; unify

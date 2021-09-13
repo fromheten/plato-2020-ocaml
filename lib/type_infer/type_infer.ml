@@ -124,7 +124,7 @@ module TVSet = Set.Make(TypeVariable)
 
 module Expr = struct
   type t =
-    | Ident of string
+    | Sym of string
     | Apply of t * t
     | Lambda of string * t
     | Let of string * t * t
@@ -140,7 +140,7 @@ module Expr = struct
   let rec to_string gensym_env e =
     let to_string = to_string gensym_env in
     match e with
-    | Ident s -> s
+    | Sym s -> s
     | Apply (fn, arg) ->
        Printf.sprintf "(%s %s)" (to_string fn) (to_string arg)
     | Lambda (v, body) ->
@@ -180,7 +180,7 @@ type analyze_error
 
 let rec analyse gensym_state node (env: (string * Type.t) list) non_generic: Type.t =
   match node with
-  | Expr.Ident name -> get_type gensym_state name env non_generic
+  | Expr.Sym name -> get_type gensym_state name env non_generic
   | Expr.Apply (fn, arg) ->
      let fun_type = analyse gensym_state fn env non_generic in
      let arg_type = analyse gensym_state arg env non_generic in
@@ -438,7 +438,7 @@ let type_infer_tests =
            (Expr.Lambda ("x"
                        , (Expr.Lambda
                             ("y"
-                            , Expr.Ident "x"))))
+                            , Expr.Sym "x"))))
            []
            TVSet.empty)) in
      Printf.sprintf
@@ -474,12 +474,12 @@ let type_infer_tests =
  *   in let pair =
  *        (Expr.Apply
  *           ((Expr.Apply
- *               ((Expr.Ident "pair"),
+ *               ((Expr.Sym "pair"),
  *                (Expr.Apply
- *                   ((Expr.Ident "f"), (Expr.Ident "4")))),
+ *                   ((Expr.Sym "f"), (Expr.Sym "4")))),
  *             (Expr.Apply
- *                ((Expr.Ident "f"),
- *                 (Expr.Ident "true"))))))
+ *                ((Expr.Sym "f"),
+ *                 (Expr.Sym "true"))))))
  *      in let examples =
  *           [
  *             (\* factorial *\)
@@ -490,52 +490,52 @@ let type_infer_tests =
  *                    Expr.Apply (
  *                        Expr.Apply (     (\* cond (zero n) 1 *\)
  *                            Expr.Apply     (\* cond (zero n) *\)
- *                              (Expr.Ident "cond",
- *                               Expr.Apply (Expr.Ident "zero", Expr.Ident "n")),
- *                            Expr.Ident "1"),
+ *                              (Expr.Sym "cond",
+ *                               Expr.Apply (Expr.Sym "zero", Expr.Sym "n")),
+ *                            Expr.Sym "1"),
  *                        Expr.Apply (     (\* times n *\)
- *                            Expr.Apply (Expr.Ident "times", Expr.Ident "n"),
+ *                            Expr.Apply (Expr.Sym "times", Expr.Sym "n"),
  *                            Expr.Apply (
- *                                Expr.Ident "factorial",
- *                                Expr.Apply (Expr.Ident "pred", Expr.Ident "n")
+ *                                Expr.Sym "factorial",
+ *                                Expr.Apply (Expr.Sym "pred", Expr.Sym "n")
  *                   )))),          (\* in *\)
- *                 Expr.Apply (Expr.Ident "factorial", Expr.Ident "5")));
+ *                 Expr.Apply (Expr.Sym "factorial", Expr.Sym "5")));
  *
  *             (\* Should fail
  *              * fun x -> (pair (x 3) (x true))
  *              *\)
  *             Expr.Lambda("x",
  *                         Expr.Apply(
- *                             Expr.Apply(Expr.Ident "pair",
- *                                        Expr.Apply(Expr.Ident "x", Expr.Ident "3")),
- *                             Expr.Apply(Expr.Ident "x", Expr.Ident "true")));
+ *                             Expr.Apply(Expr.Sym "pair",
+ *                                        Expr.Apply(Expr.Sym "x", Expr.Sym "3")),
+ *                             Expr.Apply(Expr.Sym "x", Expr.Sym "true")));
  *
  *             (\* (pair (f 3)) (f true) *\)
  *             Expr.Apply(
- *                 Expr.Apply(Expr.Ident "pair", Expr.Apply(Expr.Ident "f", Expr.Ident "4")),
- *                 Expr.Apply(Expr.Ident "f", Expr.Ident "true"));
+ *                 Expr.Apply(Expr.Sym "pair", Expr.Apply(Expr.Sym "f", Expr.Sym "4")),
+ *                 Expr.Apply(Expr.Sym "f", Expr.Sym "true"));
  *
  *             (\* let f = (fn x -> x) in ((pair (f 4)) (f true)) *\)
- *             Expr.Let("f", Expr.Lambda("x", Expr.Ident "x"), pair);
+ *             Expr.Let("f", Expr.Lambda("x", Expr.Sym "x"), pair);
  *
  *             (\* fun f -> f f *\)
  *             (\* This should fail (recursive type definition) *\)
- *             Expr.Lambda("f", Expr.Apply(Expr.Ident "f", Expr.Ident "f"));
+ *             Expr.Lambda("f", Expr.Apply(Expr.Sym "f", Expr.Sym "f"));
  *
  *             (\* let g = fun f -> 5 in g g *\)
- *             Expr.Let("g", Expr.Lambda("f", Expr.Ident "5"),
- *                      Expr.Apply(Expr.Ident "g", Expr.Ident "g"));
+ *             Expr.Let("g", Expr.Lambda("f", Expr.Sym "5"),
+ *                      Expr.Apply(Expr.Sym "g", Expr.Sym "g"));
  *
  *             (\* example that demonstrates generic and non-generic variables *\)
  *             (\* fun g -> let f = fun x -> g in pair (f 3, f true) *\)
  *             Expr.Lambda("g",
  *                         Expr.Let("f",
- *                                  Expr.Lambda("x", Expr.Ident "g"),
+ *                                  Expr.Lambda("x", Expr.Sym "g"),
  *                                  Expr.Apply(
  *                                      Expr.Apply(
- *                                          Expr.Ident "pair",
- *                                          Expr.Apply(Expr.Ident "f", Expr.Ident "3")),
- *                                      Expr.Apply(Expr.Ident "f", Expr.Ident "true"))));
+ *                                          Expr.Sym "pair",
+ *                                          Expr.Apply(Expr.Sym "f", Expr.Sym "3")),
+ *                                      Expr.Apply(Expr.Sym "f", Expr.Sym "true"))));
  *
  *             (\* function composition *\)
  *             (\* fun f -> fun g -> fun arg -> f g arg *\)
@@ -543,10 +543,10 @@ let type_infer_tests =
  *                         Expr.Lambda("g",
  *                                     Expr.Lambda("arg",
  *                                                 Expr.Apply(
- *                                                     Expr.Ident "g",
+ *                                                     Expr.Sym "g",
  *                                                     Expr.Apply(
- *                                                         Expr.Ident "f",
- *                                                         Expr.Ident "arg")))))
+ *                                                         Expr.Sym "f",
+ *                                                         Expr.Sym "arg")))))
  *
  *
  *           ]

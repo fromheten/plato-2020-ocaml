@@ -1,7 +1,7 @@
 (* This is the main entrypoint of the Plato compiler *)
 
-let rec codegen_expr: (Read.expr -> (Codegen.expr, string) result) = function
-  | Read.Lam (_pos
+let rec codegen_expr: (Expr.expr -> (Codegen.expr, string) result) = function
+  | Expr.Lam (_pos
               ,(PSym (_pos_psym
                      ,arg)
                ,expr)
@@ -12,9 +12,9 @@ let rec codegen_expr: (Read.expr -> (Codegen.expr, string) result) = function
       | Error e ->
          Error (Util.str [ "codegen_expr error: "
                          ; e]))
-  | Read.App (_pos_app
+  | Expr.App (_pos_app
               ,e0
-              ,e1) ->
+             ,e1) ->
      (match (codegen_expr e0, codegen_expr e1) with
       | (Ok e0, Ok e1) ->
          Ok (Codegen.App (e0, e1))
@@ -32,38 +32,38 @@ let rec codegen_expr: (Read.expr -> (Codegen.expr, string) result) = function
                          ;")error1 = ("
                          ;error1
                          ;")"]))
-  | Read.Sym (_pos, s) ->
+  | Expr.Sym (_pos, s) ->
      Ok (Codegen.Sym s)
-  | Read.String (_pos, s) ->
+  | Expr.String (_pos, s) ->
      Ok (Codegen.String s)
-  | Read.U8 (_pos, n) ->
+  | Expr.U8 (_pos, n) ->
      Ok (Codegen.Integer n)
-  | Read.Tuple (_pos, children) ->
+  | Expr.Tuple (_pos, children) ->
      let codegenned_children =
        (Util.list_result_of_result_list
           (List.map codegen_expr children)) in
      (match codegenned_children with
-     | Ok children ->
+      | Ok children ->
         Ok (Codegen.Tuple children)
      | Error errs -> Error
                        (String.concat ""
                           ("failed to codegen Tuple children"
                            :: errs)))
-  | Read.Match (pos, value, cases) ->
-     codegen_expr (Read.App (pos, Read.Lam (pos, cases), value))
-  | Let (_pos, name, definition, body) ->
+  | Expr.Match (pos, value, cases) ->
+     codegen_expr (Expr.App (pos, Expr.Lam (pos, cases), value))
+  | Expr.Let (_pos, name, definition, body) ->
      (match (codegen_expr definition, codegen_expr body) with
       | Ok def, Ok bod ->
          Ok (Codegen.Let (name, def, bod))
       | Error e, _| _, Error e -> Error e)
-  | Read.Ann (_pos, _t, e) -> codegen_expr e
-  | Read.Vector (_pos, xs) ->
+  | Expr.Ann (_pos, _t, e) -> codegen_expr e
+  | Expr.Vector (_pos, xs) ->
     (match (Util.all_oks (List.map codegen_expr xs)) with
      | Ok children ->
        Ok (Codegen.Vector children)
      | Error errs ->
        failwith (String.concat "\n" errs))
-  | Read.Dict (_pos, keys_values) ->
+  | Expr.Dict (_pos, keys_values) ->
     let keys = List.map fst keys_values in
     let values = List.map snd keys_values in
     (match (Util.all_oks (List.map codegen_expr keys), Util.all_oks (List.map codegen_expr values)) with
@@ -80,10 +80,10 @@ let cmdise = function
                      , other_expressions))
   | _ ->
      failwith "It seems your program returns something other than an effect.
-An effect can only be `Log` currently.
-Make your program start with applying Log.
-Here is an example: `(Log your-program)`.
-cmdise can only handle programs that begin with applying Log"
+     An effect can only be `Log` currently.
+     Make your program start with applying Log.
+     Here is an example: `(Log your-program)`.
+     cmdise can only handle programs that begin with applying Log"
 
 let compile (src: string): (string, string) result =
   let gensym_env = (Type_infer.new_env ()) in
@@ -130,10 +130,10 @@ let compile (src: string): (string, string) result =
                           | Type_infer.UnificationError msg ->
                              "UnificationError: " ^  msg)
 
-     (* try raise exn
-      * with | Type_infer.ParseError e | Type_infer.TypeError e ->
-      *         Error e *))
-       (* (Util.do_then
+      (* try raise exn
+       * with | Type_infer.ParseError e | Type_infer.TypeError e ->
+       *         Error e *))
+  (* (Util.do_then
         *  (Util.do_then_error
         *     (Type_infer.analyze_result
         *        env
@@ -196,7 +196,7 @@ let test test_msg_pairs =
   |> List.filter (fun s -> String.length s > 0)
   |> (fun testcases ->
     testcases
-    (* |> List.cons (Util.str ["Failing tests: "
+  (* |> List.cons (Util.str ["Failing tests: "
      *                        ;string_of_int (List.length testcases)]) *))
   |> String.concat "\n"
 
@@ -262,7 +262,7 @@ let () =
                            io_paths.input_files) in
      (match compile src with
       | Ok c_source ->
-         (* Write message to file *)
+     (* Write message to file *)
          let oc = open_out io_paths.output_file in    (* create or truncate file, return channel *)
          Printf.fprintf oc "%s\n" c_source;           (* write something *)
          close_out oc;                                (* flush and close the channel *)
@@ -298,10 +298,10 @@ let () =
      let status_code = Sys.command compile_command in
      exit status_code;
   | Ok (_, PublishAndPrintIDFromSTDIN (_pos)) ->
-     (* print_string (Cryptokit.hash_channel (Cryptokit.Hash.sha3 512) Stdlib.stdin); *)
+    (* print_string (Cryptokit.hash_channel (Cryptokit.Hash.sha3 512) Stdlib.stdin); *)
      let binary_hash = (Cryptokit.hash_string (Cryptokit.Hash.sha3 512) "Hello") in
      failwith binary_hash
-     (* let hash_id = Platoid.base64_encode (Read.char_list binary_hash) in
+  (* let hash_id = Platoid.base64_encode (Read.char_list binary_hash) in
       * print_string hash_id;
       * print_newline (); *)
   | Ok (_, Read.NoCommandArguments (_pos)) ->

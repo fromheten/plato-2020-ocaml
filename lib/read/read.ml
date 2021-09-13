@@ -4,44 +4,18 @@ type source =
 type 'a parseresult =
   (source * 'a, string) result
 
-type id =
-  int
-
-type position = (* source position - index *)
-  int * int
-
-type 'a pattern =
-  | PSym of position * string
-  | PTag of position * string * 'a
-
-type expr =
-  | Lam of position * (expr pattern * expr) list
-  | App of position * expr * expr
-  | Sym of position * string
-  | U8 of position * int
-  | String of position * string
-  | Tuple of position * expr list          (* pair, sum type, nple, call it what you want *)
-  | Unit of position
-  | Vector of position * expr list
-  | Set of position * expr list
-  | Ann of position * Type_infer.Type.t * expr
-  | Dict of position * (expr * expr) list
-  | Match of position * expr * (expr pattern * expr) list
-  | Let of position * string * expr * expr
-  | Letrec of position * string * expr * expr
-
 let rec from_read_expr read_expr =
   match read_expr with
-  | Lam (_pos, (PSym (_psym_pos, pattern), expr) :: _pattern_expr_rest) ->
+  | Expr.Lam (_pos, (PSym (_psym_pos, pattern), expr) :: _pattern_expr_rest) ->
     Type_infer.Expr.Lambda (pattern, from_read_expr expr)
-  | Lam (_pos, _patterns_exprs) ->
+  | Expr.Lam (_pos, _patterns_exprs) ->
     failwith "Currently I can only convert Lam with a PSym"
   (* | App (_pos, Sym (_, "Log"), _e1) ->
      *    failwith "Can't yet type check Commands" *)
   | App (_pos, e0, e1) ->
     Apply (from_read_expr e0, from_read_expr e1)
   | Sym (_pos, x) ->
-    Ident x
+    Type_infer.Expr.Sym x
   | U8 (_pos, n) -> U8 n
   | String (_pos, text) -> String text
   | Tuple (_pos, _exprs) -> failwith "from of Tuple not possible"
@@ -124,7 +98,7 @@ let string_of_position position =
            ;", end: "
            ;string_of_int (snd position)]
 
-let symbol (source: source): expr parseresult =
+let symbol (source: source): Expr.expr parseresult =
   let source = (strip_starting_spaces source) in
   let start_pos: int = (fst source) in
   let rec inner (s: source) (is_escaping: bool) (acc: char list) =
@@ -140,7 +114,7 @@ let symbol (source: source): expr parseresult =
     | (false, (pos, first :: _rest))
          when not (is_symbol_char first) && List.length acc > 0 ->
        Ok (s
-          ,Sym ((start_pos, pos), string_of_char_list (List.rev acc)))
+          ,Expr.Sym ((start_pos, pos), string_of_char_list (List.rev acc)))
     | (false, (_pos, first :: rest))
          when not (is_symbol_char first)
               && List.length acc = 0 ->
@@ -209,7 +183,7 @@ let quoted_symbol (source: source) =
         | (false, (pos, first :: rest))
              when first = '\'' ->
            Ok ((pos, rest)
-              ,Sym ((start_pos, pos)
+              ,Expr.Sym ((start_pos, pos)
                    ,string_of_char_list (List.rev acc)))
         | (true, (pos, first :: rest))
              when first = '\'' ->
@@ -238,14 +212,14 @@ let quoted_symbol (source: source) =
                                  ;string_of_int pos])
   | _ -> Error "Quoted symbols must begin with a single-quote \"'\""
 
-let string (source: source): expr parseresult =
+let string (source: source): Expr.expr parseresult =
   let src_without_preceding_spacings = (strip_starting_spaces source) in
   match src_without_preceding_spacings with
   | (start_pos, first :: _rest) when first = '"' ->
      let rec inner
                (s: source)
                (is_escaping: bool)
-               (acc: char list): expr parseresult =
+               (acc: char list): Expr.expr parseresult =
        (match (is_escaping, s) with
         | (false, (pos
                   ,first :: rest))
@@ -437,9 +411,9 @@ let rec orElse_list ps src =
   | [] -> Error "orElse_list given no ps"
 
 let vector
-      (expression: source -> expr parseresult)
+      (expression: source -> Expr.expr parseresult)
       (source: source)
-    : expr parseresult =
+    : Expr.expr parseresult =
   (map
      (right (left (andThen
                      (andThen
@@ -449,7 +423,7 @@ let vector
      (function
       | Ok ((pos, src), list) ->
          Ok ((pos, src)
-            ,Vector ((fst source, pos), list))
+            ,Expr.Vector ((fst source, pos), list))
       | Error e ->
          Error e))
     source
@@ -461,9 +435,9 @@ let vector_tests =
     = Error "Source '#{ []}#' not matching literal '['")]
 
 let set
-      (expr: source -> expr parseresult)
+      (expr: source -> Expr.expr parseresult)
       (source: source)
-    : expr parseresult =
+    : Expr.expr parseresult =
   (map
      (right (left (andThen
                      (andThen
@@ -473,7 +447,7 @@ let set
      (Util.take_ok (fun ((end_pos, src), list) ->
           let pos: int = end_pos in
           ((pos, src)
-          ,Set ((fst source, pos), list)))))
+          ,Expr.Set ((fst source, pos), list)))))
     source
 
 let set_tests =
@@ -513,13 +487,13 @@ let set_tests =
               ,[Sym ((3, 7)
                     ,"sym")])))]
 
-let pattern expression: source -> ('a pattern) parseresult =
+let pattern expression: source -> ('a Expr.pattern) parseresult =
   let symbol_pattern = (map (orElse
                                symbol
                                quoted_symbol)
      (function
       | Ok ((end_pos, rest), Sym (pos, s)) ->
-         Ok ((end_pos, rest), PSym (pos, s))
+         Ok ((end_pos, rest), Expr.PSym (pos, s))
       | Error e -> Error e
       | _ -> failwith "you made it a result ;-)")) in
   let tag_pattern = (map (andThen (andThen (andThen
@@ -529,14 +503,14 @@ let pattern expression: source -> ('a pattern) parseresult =
 				                        (literal ")"))
                        (Util.take_ok
                           (function
-                           | (source, ((((), Sym (name_pos, name)), child), ())) ->
+                           | (source, ((((), Expr.Sym (name_pos, name)), child), ())) ->
                               (source
-                              ,PTag (name_pos, name, child))
+                              ,Expr.PTag (name_pos, name, child))
                            | _ -> failwith "don't know hwo to handle this"
                     ))) in
   (orElse symbol_pattern tag_pattern)
 
-let lambda (expression: source -> expr parseresult) (source: source): expr parseresult =
+let lambda (expression: source -> Expr.expr parseresult) (source: source): Expr.expr parseresult =
   let pattern = pattern expression in
   (map (andThen (andThen
                    (andThen
@@ -554,15 +528,15 @@ let lambda (expression: source -> expr parseresult) (source: source): expr parse
                :: arg_bodies_list)
             , ())) ->
          Ok ((new_pos, rest)
-            ,Lam ((fst source, new_pos) (* TODO make this use the skipped spaces version  *)
+            ,Expr.Lam ((fst source, new_pos) (* TODO make this use the skipped spaces version  *)
                  ,((PSym (psym_pos, x)
                    ,body0) :: arg_bodies_list)))
       | _ -> Error "lambda must contain parameter and body expression"))
     source
 
-let rec undeepen (source: source) (patterns_exps: (expr list * expr) list) =
+let rec undeepen (source: source) (patterns_exps: (Expr.expr list * Expr.expr) list) =
   (* BUG *)
-  let inner: (expr list * expr) -> (expr pattern * expr) = function
+  let inner: (Expr.expr list * Expr.expr) -> (Expr.expr Expr.pattern * Expr.expr) = function
     | ((Sym (psym_pos, first)) :: [], e) ->
        (PSym (psym_pos, first), e)
     | (Sym (psym_pos, first) :: rest, e) ->
@@ -576,7 +550,7 @@ let rec undeepen (source: source) (patterns_exps: (expr list * expr) list) =
   (source
   , Lam (((fst source), (fst source) + 1), List.map inner patterns_exps))
 
-let deep_lambda (expr: source -> expr parseresult) (source: source) =
+let deep_lambda (expr: source -> Expr.expr parseresult) (source: source) =
   (map (andThen
           (andThen
              (andThen
@@ -591,7 +565,7 @@ let deep_lambda (expr: source -> expr parseresult) (source: source) =
                        ())) -> undeepen new_source_code
                                  (List.map
                                     (function
-                                     | (Vector (_vec_pos, v), e) -> (v, e)
+                                     | (Expr.Vector (_vec_pos, v), e) -> (v, e)
                                      | _ -> failwith "Give me vector or give me death")
                                     patterns_exprs))))
     source
@@ -702,13 +676,13 @@ let rec typ global_env src : Type_infer.Type.t parseresult =
                ;tsym global_env])
     src
 
-let unit source: expr parseresult =
+let unit source: Expr.expr parseresult =
   (map (andThen (literal "<")
           (literal ">"))
      (Util.take_ok
         (fun ((end_pos, rest), ((), ())) ->
           ((end_pos, rest)
-          ,Unit (fst source, end_pos)))))
+          ,Expr.Unit (fst source, end_pos)))))
     source
 
 let u8 =
@@ -726,7 +700,7 @@ let u8 =
          (match int_of_string_opt name with
           | Some n ->
             Ok ((src_end_pos, src_rest)
-               ,U8 ((sym_start_pos, sym_end_pos)
+               ,Expr.U8 ((sym_start_pos, sym_end_pos)
                    ,n))
           | None -> Error (Util.str ["Failiig to parse u8: "
                                     ;name]))
@@ -735,19 +709,19 @@ let u8 =
        | _ -> failwith "nopez seniorez"))
 
 let tuple
-      (expression: source -> expr parseresult)
+      (expression: source -> Expr.expr parseresult)
       source
-    : expr parseresult =
+    : Expr.expr parseresult =
   (map (andThen (andThen (literal "<")
                    (n_or_more 1 expression))
           (literal ">"))
      (Util.take_ok
         (fun ((end_pos, rest), (((), children),())) ->
           ((end_pos, rest)
-          ,Tuple ((fst source, end_pos), children)))))
+          ,Expr.Tuple ((fst source, end_pos), children)))))
     source
 
-let annotation gensym_env (expression: source -> expr parseresult) source : expr parseresult =
+let annotation gensym_env (expression: source -> Expr.expr parseresult) source : Expr.expr parseresult =
   (map (andThen (andThen (andThen (andThen
                                      (literal "(")
                                      (literal ":"))
@@ -756,12 +730,12 @@ let annotation gensym_env (expression: source -> expr parseresult) source : expr
           (literal ")"))
      (Util.take_ok (fun ((end_pos, rest), (((((), ()), t), e), ())) ->
           ((end_pos, rest)
-          ,Ann ((fst source, end_pos), t, e)))))
+          ,Expr.Ann ((fst source, end_pos), t, e)))))
     source
 
 (* Since this would match many things, ensure it's last in the orElse sequence *)
 let application
-      (expression: source -> expr parseresult) source : expr parseresult =
+      (expression: source -> Expr.expr parseresult) source : Expr.expr parseresult =
   (map (andThen (andThen
                    (literal "(")
                    (n_or_more 2 expression))
@@ -771,7 +745,7 @@ let application
           (* Forgive me *)
           let rec appise = function
             | x :: [] -> x
-            | x :: xs -> App ((fst source, pos)
+            | x :: xs -> Expr.App ((fst source, pos)
                              ,appise xs
                              ,x)
             | [] -> failwith "Go app yourself"
@@ -779,7 +753,7 @@ let application
              ,appise (List.rev xs)))))
     source
 
-let let_expr expression source: expr parseresult =
+let let_expr expression source: Expr.expr parseresult =
   (map
      (andThen
 	(andThen
@@ -796,11 +770,11 @@ let let_expr expression source: expr parseresult =
         (function
          | ((end_index, rest)
            ,(((((), ()),
-               (PSym (_psym_pos, name), definition)),
+               (Expr.PSym (_psym_pos, name), definition)),
               body),
              ())) ->
             ((end_index, rest)
-            ,Let ((fst source, end_index), name, definition, body))
+            ,Expr.Let ((fst source, end_index), name, definition, body))
          | _ -> failwith "let_expr with non-PSym definition - fix this")))
   source
 
@@ -812,7 +786,7 @@ let dict expression source =
      (Util.take_ok
 	(fun ((pos, rest), (((), keys_and_vals), ())) ->
 	  ((pos, rest)
-          ,Dict ((fst source, pos), keys_and_vals)))))
+          ,Expr.Dict ((fst source, pos), keys_and_vals)))))
     source
 
 let match_expr expression source =
@@ -831,10 +805,10 @@ let match_expr expression source =
         (fun
            ((pos, rest), (((((), ()), expr), expr_pattern_expr_list), ())) ->
           ((pos, rest)
-          ,Match ((fst source, pos), expr, expr_pattern_expr_list)))))
+          ,Expr.Match ((fst source, pos), expr, expr_pattern_expr_list)))))
     source
 
-let rec expression gensym_env (source_code: source): expr parseresult =
+let rec expression gensym_env (source_code: source): Expr.expr parseresult =
   let expression = expression gensym_env in
   orElse_list
     [ u8
@@ -868,9 +842,9 @@ let string_of_sym s =
   else s_list
 
 let string_of_pattern string_of_value = function
-  | PSym (_pos, s) ->
+  | Expr.PSym (_pos, s) ->
      string_of_sym s
-  | PTag (_pos, tag, value) ->
+  | Expr.PTag (_pos, tag, value) ->
      ['(']
      @ string_of_sym tag
      @ [' ']
@@ -879,7 +853,7 @@ let string_of_pattern string_of_value = function
 
 let rec string_of_expr gensym_env =
   function
-  | Let (_pos, name, definition, body) ->
+  | Expr.Let (_pos, name, definition, body) ->
      char_list (Printf.sprintf "(let %s %s\n  %s)"
                   name
                   (string_of_char_list (string_of_expr gensym_env definition))
@@ -895,12 +869,12 @@ let rec string_of_expr gensym_env =
      @ [')']
   | Sym (_pos, s) ->
      string_of_sym s
-  | Lam (_pos, patterns_exprs) ->
+  | Expr.Lam (_pos, patterns_exprs) ->
      (char_list "(λ ")
      @ List.concat
          (List.concat
             (List.map (function
-                 | PTag (_ptag_pos, name, child), expr ->
+                 | Expr.PTag (_ptag_pos, name, child), expr ->
                     [['(']
                     ;char_list name
                     ;[' ']
@@ -1127,13 +1101,13 @@ type io_paths =
   ; output_file: string}
 
 type compiler_cmd =
-  | ShowPrintTests of position
-  | OutputCToPath of position * io_paths
-  | OutputExeToPath of position * io_paths
-  | PrintHelp of position
-  | PublishAndPrintIDFromSTDIN of position
-  | NoCommandArguments of position
-  | Run of position * string
+  | ShowPrintTests of Expr.position
+  | OutputCToPath of Expr.position * io_paths
+  | OutputExeToPath of Expr.position * io_paths
+  | PrintHelp of Expr.position
+  | PublishAndPrintIDFromSTDIN of Expr.position
+  | NoCommandArguments of Expr.position
+  | Run of Expr.position * string
 
 let parse_arg_test_results source =
   (map
