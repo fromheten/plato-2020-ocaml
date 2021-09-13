@@ -53,7 +53,7 @@ target/include/sds.h: sds/
 
 hash-array-mapped-trie-poly/:
 	git clone https://github.com/fromheten/hash-array-mapped-trie-poly.git
-	cd hash-array-mapped-trie-poly && git checkout 2.0 && git log -n1
+	cd hash-array-mapped-trie-poly && git checkout 2.1 && git log -n1
 
 target/include/hamt.h: hash-array-mapped-trie-poly/
 	cp hash-array-mapped-trie-poly/hamt.h $@

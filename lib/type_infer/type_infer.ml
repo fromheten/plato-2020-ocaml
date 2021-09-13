@@ -284,7 +284,7 @@ and get_type global_env name context non_generic =
                           (Printf.sprintf
                              "TypeError: Can't find enum for tag %s"
                              name))
-  else raise (ParseError ("Undefined symbol " ^ name))
+  else raise (ParseError ("Undefined symbol in type inferrer: " ^ name))
 
 and fresh global_env t non_generic: Type.t =
   let mappings = Hashtbl.create 30 in

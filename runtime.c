@@ -21,22 +21,16 @@ struct lambda {
   // char* name;
 };
 
-/* uvalue depends on value_hamt, but value_hamt depends on value,
-which depends on uvalue.
-
-To solve this circular dependency, I create this wrapper struct with a
-void pointer.
-*/
-typedef struct value_hamt_ptr {
-  void *ptr;
-} value_hamt_ptr;
+/* Predefine `value_hamt`. `uvalue` depends on `value_hamt`, but `value_hamt`
+depends on `value`, which depends on `uvalue`. */
+typedef struct value_hamt value_hamt;
 
 union uvalue {
   char *string;
   unsigned char u8;
   const RRB *vector;
   struct lambda lambda;
-  value_hamt_ptr *dict;
+  value_hamt *dict;
 };
 
 enum runtime_type { STRING, U8, LAMBDA, VECTOR, DICT };
@@ -148,26 +142,34 @@ struct value makeVector(const RRB *rrb) {
   return *v;
 }
 
-value makeDict(value_hamt *val_hamt) {
-  value_hamt_ptr *val_hamt_ptr = malloc(sizeof(value_hamt_ptr));
-  val_hamt_ptr->ptr = malloc(sizeof(value_hamt));
-  memcpy(val_hamt_ptr->ptr, val_hamt, sizeof(value_hamt));
+value makeDict(value_hamt *hamt) {
   union uvalue *uv = (union uvalue *)malloc(sizeof(union uvalue));
   struct value *v = (struct value *)malloc(sizeof(struct value));
 
-  uv->dict = val_hamt_ptr;
+  uv->dict = hamt;
   v->type = DICT;
   v->actual_value = *uv;
   return *v;
 }
 
+/* /\** */
+/*  * Reduce for dictionaries */
+/*  *\/ */
+/* value data_reduce_inner(value *key, void *value_ptr) { */
+/*   value *value = (value *)value_ptr; */
+/*   return reducer() */
+/* } */
+value dict_reduce(value_hamt *hamt, value (*reducer)(value *, value *),
+                  value acc) {
+  /* value_hamt_visit_all(hamt, void (*visitor)(value *, void *)); */
+  /* TODO implement reduce, after which every other operation can be implemented
+   */
+  return acc;
+}
+
 /* takes a hamt and two values, returns hamt */
-static inline value_hamt_ptr *dict_set(value_hamt_ptr *hamt_ptr, value *key,
-                                       value *val) {
-  value_hamt_ptr *return_val = malloc(sizeof(value_hamt_ptr));
-  value_hamt *hamt = (value_hamt *)hamt_ptr;
-  return_val->ptr = (void *)value_hamt_set(hamt, key, val);
-  return (return_val);
+static inline value_hamt *dict_set(value_hamt *hamt, value *key, value *val) {
+  return value_hamt_set(hamt, key, val);
 }
 
 /* Takes nothing, returns a hamt */
