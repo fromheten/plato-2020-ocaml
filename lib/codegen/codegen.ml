@@ -88,6 +88,18 @@ let generate_lambda generate lam_arg lam_body state =
       final_string
    | None -> final_string)
 
+let generate_match generate state x = function
+  | (Expr.PSym (pos, sym), expr) :: _rest ->
+     let the_app = Expr.App (pos,
+                             Expr.Lam (pos,
+                                       [Expr.PSym (pos, sym),
+                                        expr]),
+                             x) in
+     generate the_app state
+  | (PTag (_pos, _tag, _x), _expr) :: _rest ->
+     failwith "TODO Tagged unions codegen not done yet"
+  | [] -> failwith "Match with no cases - makes no sense"
+
 exception GenerateError of string
 
 let rec generate (expression: Expr.expr) (state: state ref): string =
@@ -145,13 +157,6 @@ let rec generate (expression: Expr.expr) (state: state ref): string =
                        ; string_of_int i
                        ; ")"];
       !code
-   (* | App (Command LogCmd, expression_to_print) ->
-    *    code := Util.str [ !code
-    *                     ; "print("
-    *                     ; generate expression_to_print state
-    *
-    *                     ; ")"];
-    *    !code *)
    | App(_, Sym (_, my_symbol), expr_to_convert) when my_symbol = "string" ->
       code := Util.str [ !code
                        ; "toString("
@@ -205,8 +210,9 @@ Until I create match, I don't really have to allocate these
       failwith "TODO codegen of set not yet implemented"
    | Ann (_, _, expression) ->
       generate expression state
-   | Match (_, _, _) ->
-      failwith "TODO generate a bunch of if/else for this")
+   | Match (_, x, cases) ->
+      let generate_match = generate_match generate state in
+      generate_match x cases)
 
 let generate_program expression =
   let state = ref { lam_number = 0
