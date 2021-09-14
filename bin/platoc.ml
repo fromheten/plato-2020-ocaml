@@ -86,13 +86,14 @@ let cmdise = function
      cmdise can only handle programs that begin with applying Log"
 
 let compile (src: string): (string, string) result =
-  let gensym_env = (Type.new_env ()) in
+  let gensym_env = (Type.new_gensym_state ()) in
   match Read.expression
           gensym_env
           (0
           ,(Util.char_list src)) with
   | Ok (_rest, expr) ->
-     let new_env () = (Type.new_env ()) in
+     Printf.printf "Parsed expression: %s\n" (Expr.string_of_expr (Type.new_gensym_state ()) expr);
+     let new_env () = (Type.new_gensym_state ()) in
      let env = (new_env ()) in
      let stdlib =
        [("Bool", Type.Type.TyTagUnion (["True", Type_infer.my_Unit
@@ -109,7 +110,7 @@ let compile (src: string): (string, string) result =
                   env
                   stdlib
                   expr) with
-         | Ok typ -> Printf.printf "\nType: %s\n" (Type.Type.to_string (Type.new_env ()) typ);
+         | Ok typ -> Printf.printf "\nType: %s\n" (Type.Type.to_string (Type.new_gensym_state ()) typ);
                      Ok (Type.Type.to_string (new_env ()) typ)
          | Error e -> Error e) with
       | Ok _typ -> (match codegen_expr expr with

@@ -774,44 +774,44 @@ let string_of_quoted_symbol s = Util.str ["\""; s; "\""]
 
 let expression_tests =
   [ ( "Why does this symbol not end at the space?"
-    , expression (Type.new_env ()) (0, (Util.char_list "hello#{}#"))
+    , expression (Type.new_gensym_state ()) (0, (Util.char_list "hello#{}#"))
       = Ok ((5,['#'; '{'; '}'; '#'])
            ,Sym ((0, 5), "hello")))
   ; ( "Set of stuff"
-    , expression (Type.new_env ()) (0, (Util.char_list "#{ hello there}#"))
+    , expression (Type.new_gensym_state ()) (0, (Util.char_list "#{ hello there}#"))
       = Ok ((16, []),
             Set ((0, 16), [Sym ((3, 8), "hello"); Sym ((9, 14), "there")])))
   ; ( "Set of vector"
-    , expression (Type.new_env ()) (0, (Util.char_list "#{ []}# "))
+    , expression (Type.new_gensym_state ()) (0, (Util.char_list "#{ []}# "))
       = Ok ((7, [' ']), Set ((0, 7), [Vector ((2, 5), [])])))
   ; ( "Unit"
-    , expression (Type.new_env ()) (0, (Util.char_list "  <> "))
+    , expression (Type.new_gensym_state ()) (0, (Util.char_list "  <> "))
       = Ok ((4, [' ']), Unit (0, 4)))
   ; ( "Full tuple"
-    , expression (Type.new_env ()) (0, Util.char_list "<hello <>> ")
+    , expression (Type.new_gensym_state ()) (0, Util.char_list "<hello <>> ")
       = Ok ((10, [' '])
            ,Tuple ((0, 10), [Sym ((1, 6), "hello"); Unit (6, 9)])))
   ; ("parse K"
-    , expression (Type.new_env ()) (0, Util.char_list "(λ x (λ y x))")
+    , expression (Type.new_gensym_state ()) (0, Util.char_list "(λ x (λ y x))")
       = Ok
           ((15, []),
            Lam ((0, 15),
                 [(PSym ((4, 5), "x"),
                   Lam ((5, 14), [(PSym ((10, 11), "y"), Sym ((12, 13), "x"))]))])))
   ; ("Annotate Unit"
-    , expression (Type.new_env ()) (0, Util.char_list "(: <> <>)")
+    , expression (Type.new_gensym_state ()) (0, Util.char_list "(: <> <>)")
       = Ok ((9, [])
            ,Ann ((0, 9)
                 ,Type_infer.my_Unit
                 ,Unit (5, 8))))
   ; ("Deep λ"
-    , expression (Type.new_env ()) (0, Util.char_list "(λ [x y] x)")
+    , expression (Type.new_gensym_state ()) (0, Util.char_list "(λ [x y] x)")
       = Ok ((12, []),
             Lam ((12, 13),
                  [(PSym ((5, 6), "x"),
                    Lam ((12, 13), [(PSym ((7, 8), "y"), Sym ((10, 11), "x"))]))])))
   ; ("Advanced K annotation"
-    , expression (Type.new_env ()) (0, Util.char_list "(: (-> X Y X) (λ [x y] x))")
+    , expression (Type.new_gensym_state ()) (0, Util.char_list "(: (-> X Y X) (λ [x y] x))")
       = Ok
         ((27, []),
          Ann ((0, 27),
@@ -829,7 +829,7 @@ let expression_tests =
                    [(PSym ((19, 20), "x"),
                      Lam ((26, 27), [(PSym ((21, 22), "y"), Sym ((24, 25), "x"))]))]))))
   ; ("Apply annotated K"
-    , expression (Type.new_env ()) (0, Util.char_list "((: (-> X Y X) (λ [x y] x)) 音 '沈黙')")
+    , expression (Type.new_gensym_state ()) (0, Util.char_list "((: (-> X Y X) (λ [x y] x)) 音 '沈黙')")
       = Ok
         ((41, []),
          App ((0, 41),
@@ -852,7 +852,7 @@ let expression_tests =
               Sym ((33, 40), "沈黙"))))
 
   ; ( "FAILURE?? Nested applications happen in order"
-    , application (expression (Type.new_env ())) (0, Util.char_list "(x (y z) (a b) c)")
+    , application (expression (Type.new_gensym_state ())) (0, Util.char_list "(x (y z) (a b) c)")
       = Ok
           ((17, []),
            App ((0, 17),        (* (((x (y z))) (a b) c) *)
@@ -862,10 +862,10 @@ let expression_tests =
                      App ((8, 14), Sym ((10, 11), "a"), Sym ((12, 13), "b"))),
                 Sym ((15, 16), "c"))))
   ; ("Strings are parsed as expressions"
-    , expression (Type.new_env ()) (0, Util.char_list "  \"Hello\"  ")
+    , expression (Type.new_gensym_state ()) (0, Util.char_list "  \"Hello\"  ")
       = Ok ((7, [' '; ' ']), String ((2, 7), "Hello")))
   ; ("Application and typ vars"
-    , expression (Type.new_env ()) (0, Util.char_list "((λ x (λ y x)) \"first\" \"second\")")
+    , expression (Type.new_gensym_state ()) (0, Util.char_list "((λ x (λ y x)) \"first\" \"second\")")
       = Ok ((30, []),
             App ((0, 30),
                  App ((0, 30),
@@ -875,11 +875,11 @@ let expression_tests =
                       String ((17, 22), "first")),
                  String ((23, 29), "second"))))
   ; ("parse u8"
-    , expression (Type.new_env ()) (0, Util.char_list "  (u8 1337)")
+    , expression (Type.new_gensym_state ()) (0, Util.char_list "  (u8 1337)")
       = Ok ((11, [])
            ,U8 ((6, 10), 1337)))
   ; ("You know what they say about men with large vocabularies? They also have a large Dict"
-    , dict (expression (Type.new_env ())) (0, Util.char_list "{\"ichi\" 1 \"ni\" 2 \"san\" 3}")
+    , dict (expression (Type.new_gensym_state ())) (0, Util.char_list "{\"ichi\" 1 \"ni\" 2 \"san\" 3}")
       = Ok ((19, []),
             Dict ((0, 19),
                   [(String ((1, 5), "ichi"), Sym ((6, 7), "1"));
@@ -889,7 +889,7 @@ let expression_tests =
 let typ_tests =
   [("Longbow arrows"
    , typ
-       (Type.new_env ())
+       (Type.new_gensym_state ())
        (0, Util.char_list "(-> X Y X)")
      = Ok
        ((10, []),
@@ -907,9 +907,9 @@ let typ_tests =
 
 let src_to_src src =
   Util.take_ok
-    (Util.comp (Expr.string_of_expr (Type.new_env ())) Util.second)
+    (Util.comp (Expr.string_of_expr (Type.new_gensym_state ())) Util.second)
     (expression
-       (Type.new_env ())
+       (Type.new_gensym_state ())
        (0, (Util.char_list src)))
 
 let src_to_src_test src =
@@ -919,7 +919,7 @@ let src_to_src_test src =
 let string_of_expr_tests =
   [("string of quoted symbol"
    ,Expr.string_of_expr
-       (Type.new_env ())
+       (Type.new_gensym_state ())
        (Sym ((0, 0), " I'm a quoted symbol"))
     = "\" I'm a quoted symbol\"")
   ;("string of lambda"

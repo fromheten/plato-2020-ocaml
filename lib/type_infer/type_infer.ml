@@ -290,7 +290,7 @@ let analyze_result global_env env node =
 
 let type_infer_tests =
   [( let actually =
-       (let global_env = Type.new_env () in
+       (let global_env = Type.new_gensym_state () in
         (analyse
            global_env
            (Expr.Lam ((-1, -1),
@@ -304,7 +304,7 @@ let type_infer_tests =
      Printf.sprintf
        "type of K combinator is (-> a b a), actually: %s"
        (Type.Type.to_string
-          (Type.new_env ())
+          (Type.new_gensym_state ())
           actually)
    , actually
      = (Type.Type.TyOp
