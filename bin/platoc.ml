@@ -1,90 +1,5 @@
 (* This is the main entrypoint of the Plato compiler *)
 
-let rec codegen_expr: (Expr.expr -> (Codegen.expr, string) result) = function
-  | Expr.Lam (_pos
-              ,(PSym (_pos_psym
-                     ,arg)
-               ,expr)
-               :: _rest) ->
-     (match codegen_expr expr with
-      | Ok body ->
-         Ok (Codegen.Lam (arg, body))
-      | Error e ->
-         Error (Util.str [ "codegen_expr error: "
-                         ; e]))
-  | Expr.App (_pos_app
-              ,e0
-             ,e1) ->
-     (match (codegen_expr e0, codegen_expr e1) with
-      | (Ok e0, Ok e1) ->
-         Ok (Codegen.App (e0, e1))
-      | (Error error0, Ok _e1) ->
-         Error (Util.str ["codegen_expr error0 = ["
-                         ;error0
-                         ;"]"])
-      | (Ok _e0, Error error1) ->
-         Error (Util.str ["codegen_expr error1 = <"
-                         ;error1
-                         ;">"])
-      | (Error error0, Error error1) ->
-         Error (Util.str ["codegen_expr error0 = ("
-                         ;error0
-                         ;")error1 = ("
-                         ;error1
-                         ;")"]))
-  | Expr.Sym (_pos, s) ->
-     Ok (Codegen.Sym s)
-  | Expr.String (_pos, s) ->
-     Ok (Codegen.String s)
-  | Expr.U8 (_pos, n) ->
-     Ok (Codegen.U8 n)
-  | Expr.Tuple (_pos, children) ->
-     let codegenned_children =
-       (Util.list_result_of_result_list
-          (List.map codegen_expr children)) in
-     (match codegenned_children with
-      | Ok children ->
-        Ok (Codegen.Tuple children)
-     | Error errs -> Error
-                       (String.concat ""
-                          ("failed to codegen Tuple children"
-                           :: errs)))
-  | Expr.Match (pos, value, cases) ->
-     codegen_expr (Expr.App (pos, Expr.Lam (pos, cases), value))
-  | Expr.Let (_pos, name, definition, body) ->
-     (match (codegen_expr definition, codegen_expr body) with
-      | Ok def, Ok bod ->
-         Ok (Codegen.Let (name, def, bod))
-      | Error e, _| _, Error e -> Error e)
-  | Expr.Ann (_pos, _t, e) -> codegen_expr e
-  | Expr.Vector (_pos, xs) ->
-    (match (Util.all_oks (List.map codegen_expr xs)) with
-     | Ok children ->
-       Ok (Codegen.Vector children)
-     | Error errs ->
-       failwith (String.concat "\n" errs))
-  | Expr.Dict (_pos, keys_values) ->
-    let keys = List.map fst keys_values in
-    let values = List.map snd keys_values in
-    (match (Util.all_oks (List.map codegen_expr keys), Util.all_oks (List.map codegen_expr values)) with
-     | (Ok keys, Ok values) ->
-       Ok (Codegen.Dict (List.combine keys values))
-     | _ -> failwith "Can't convert Dict to codegen expression")
-  | _ -> failwith "can't convert this to codegen expression"
-
-let cmdise = function
-  | Codegen.App ( Codegen.Sym print_sym
-                , other_expressions)
-       when print_sym = "Log" ->
-     Ok (Codegen.App ( Codegen.Command Codegen.LogCmd
-                     , other_expressions))
-  | _ ->
-     failwith "It seems your program returns something other than an effect.
-     An effect can only be `Log` currently.
-     Make your program start with applying Log.
-     Here is an example: `(Log your-program)`.
-     cmdise can only handle programs that begin with applying Log"
-
 let compile (src: string): (string, string) result =
   let gensym_env = (Type.new_gensym_state ()) in
   match Read.expression
@@ -92,7 +7,6 @@ let compile (src: string): (string, string) result =
           (0
           ,(Util.char_list src)) with
   | Ok (_rest, expr) ->
-     Printf.printf "Parsed expression: %s\n" (Expr.string_of_expr (Type.new_gensym_state ()) expr);
      let new_env () = (Type.new_gensym_state ()) in
      let env = (new_env ()) in
      let stdlib =
@@ -113,92 +27,32 @@ let compile (src: string): (string, string) result =
          | Ok typ -> Printf.printf "\nType: %s\n" (Type.Type.to_string (Type.new_gensym_state ()) typ);
                      Ok (Type.Type.to_string (new_env ()) typ)
          | Error e -> Error e) with
-      | Ok _typ -> (match codegen_expr expr with
-                   | Ok codegen_expr ->
-                      (match cmdise codegen_expr with
-                       | Ok program ->
-                          Ok (Codegen.generate_program program)
-                       | Error e -> Error (Util.str [ "cmdise expr error: "
-                                                    ; e]))
-                   | Error inner_err ->
-                      Error (Util.str ["inner fail: "
-                                      ;inner_err]))
+      | Ok _typ -> Ok (Codegen.generate_program expr)
       | Error e -> Error (match e with
                           | Type_infer.ParseError msg  ->
                              "ParseError: " ^  msg
                           | Type_infer.TypeError msg ->
                              "TypeError: " ^  msg
                           | Type_infer.UnificationError msg ->
-                             "UnificationError: " ^  msg)
-
-      (* try raise exn
-       * with | Type_infer.ParseError e | Type_infer.TypeError e ->
-       *         Error e *))
-  (* (Util.do_then
-        *  (Util.do_then_error
-        *     (Type_infer.analyze_result
-        *        env
-        *        stdlib
-        *        (Type_infer.Expr.from_read_expr expr))
-        *     (fun typ ->
-        *       Printf.printf "Type: %s\n" (Type.Type.to_string (new_env ()) typ);
-        *       Ok (Type.Type.to_string (new_env ()) typ))
-        *     (fun error ->
-        *       (try raise error
-        *        with | Type_infer.ParseError e | Type_infer.TypeError e ->
-        *                Error e)))
-        *  (fun _typ ->
-        *    (match codegen_expr expr with
-        *     | Ok codegen_expr ->
-        *        (match cmdise codegen_expr with
-        *         | Ok program ->
-        *            Ok (Codegen.generate_program program)
-        *         | Error e -> Error (Util.str [ "cmdise expr error: "
-        *                                      ; e]))
-        *     | Error inner_err ->
-        *        Error (Util.str ["inner fail: "
-        *                        ;inner_err])))) *)
+                             "UnificationError: " ^  msg))
   | Error e ->
      Error (Util.str ["`Platoc.compile` Error: e: "
                      ;e])
-
-let compile_tests =
-  [((Util.str ["compile"])
-   , true)
-  ; ( "LogCmd can be done - temp fix until Unions are implemented"
-    , cmdise (Codegen.App ( Codegen.Sym "Log"
-                          , Codegen.App
-                              ( Codegen.App
-                                  ( Codegen.Lam
-                                      ( "first"
-                                      , Codegen.Lam
-                                          ( "second"
-                                          , Codegen.Sym "first"))
-                                  , Codegen.String "Hello first")
-                              , Codegen.String "Bye!")))
-      = Ok (Codegen.App
-              (Codegen.Command Codegen.LogCmd
-              ,Codegen.App
-                 (Codegen.App
-                    ( Codegen.Lam
-                        ( "first"
-                        , Codegen.Lam
-                            ( "second"
-                            , Codegen.Sym "first"))
-                    , Codegen.String "Hello first")
-                 , Codegen.String "Bye!"))))]
 
 let test test_msg_pairs =
   test_msg_pairs
   |> List.map (fun (msg, test) ->
          if test
-         then Util.str ["OK: "; msg]
+         then Util.str [(* "OK: "; msg *)]
          else Util.str ["Error: "; msg])
   |> List.filter (fun s -> String.length s > 0)
   |> (fun testcases ->
     testcases
-  (* |> List.cons (Util.str ["Failing tests: "
-     *                        ;string_of_int (List.length testcases)]) *))
+  |> List.cons (Util.str ["Passing tests: "
+                         ;string_of_int ((List.length test_msg_pairs) - (List.length testcases))
+                         ;". Failing tests: "
+                         ;string_of_int (List.length testcases)
+                         ]))
   |> String.concat "\n"
 
 let print_tests_results =
@@ -216,7 +70,6 @@ let print_tests_results =
     ; Read.typ_tests
     ; Read.string_tests
     ; Codegen.ocaml_import_tests
-    ; compile_tests
     ; Read.string_of_expr_tests
     ; Type_infer.type_infer_tests]
   |> test

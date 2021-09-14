@@ -1,4 +1,3 @@
-(Log
- (let f (λ p p)
-  (f ((λ passed "Success :)")
-      (λ x x)))))
+(let f (λ p p)
+ (f ((λ passed "Success :)")
+     (λ x x))))

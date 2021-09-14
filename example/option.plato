@@ -1,4 +1,3 @@
-(Log
- (match (Some (u8 1337))
-  (Some n) n
-  None (u8 0)))
+(match (Some (u8 1337))
+ (Some n) n
+ None (u8 0))

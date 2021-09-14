@@ -1,4 +1,3 @@
-(Log
- (((λ [x y] x)
-   "first")
-  "second"))
+(((λ [x y] x)
+  "first")
+ "second")

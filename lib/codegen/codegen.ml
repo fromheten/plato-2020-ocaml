@@ -26,21 +26,6 @@ type state =
   ; current_context: context option
   }
 
-type cmd =
-  | LogCmd
-
-type expr =
-  | App of expr * expr
-  | Lam of string * expr
-  | Sym of string
-  | String of string
-  | U8 of int
-  | Command of cmd
-  | Tuple of expr list
-  | Let of string * expr * expr
-  | Vector of expr list
-  | Dict of (expr * expr) list
-
 let generate_lambda generate lam_arg lam_body state =
   let current_lam_number = !state.lam_number in
   state := { !state with lam_number = !state.lam_number + 1 };
@@ -105,20 +90,26 @@ let generate_lambda generate lam_arg lam_body state =
 
 exception GenerateError of string
 
-let rec generate (expression: expr) (state: state ref): string =
+let rec generate (expression: Expr.expr) (state: state ref): string =
   let code = ref "" in
   (match expression with
-   | Let (name, definition, body) ->
+   | Let (pos, name, definition, body) ->
       generate
-        (App (Lam (name, body)
+        (App (pos
+             ,Lam (pos, [PSym (pos, name), body])
              ,definition))
         state
-   | Lam (lam_arg, lam_body) ->
+   | Letrec (_, _, _, _) ->
+      failwith "TODO generate of letrec not yet done"
+   | Lam (_, (PSym (_, lam_arg), lam_body)::_rest) ->
       code := Util.str
                 [ !code
                 ; generate_lambda generate lam_arg lam_body state];
       !code
-   | Sym sym ->
+   | Lam (_, (PTag (_, _, _), _)::_) ->
+      failwith "TODO Can't yet codegen lambdas of tags"
+   | Lam (_, []) -> failwith "Error - given lambda without cases"
+   | Sym (_pos, sym) ->
       let curr_ctx = ref !state.current_context in
       code := Util.str [!code
                        ;"ctx"];
@@ -139,32 +130,35 @@ let rec generate (expression: expr) (state: state ref): string =
          | None -> break := true;)
       done;
       !code
-   | String string ->
+   | Unit _ ->
+      code := !code ^ "makeUnit()";
+      !code
+   | String (_, string) ->
       code := Util.str [ !code
                        ; "makeString(\""
                        ; string
                        ; "\")"];
       !code
-   | U8 i ->
+   | U8 (_, i) ->
       code := Util.str [ !code
                        ; "makeU8("
                        ; string_of_int i
                        ; ")"];
       !code
-   | App (Command LogCmd, expression_to_print) ->
-      code := Util.str [ !code
-                       ; "print("
-                       ; generate expression_to_print state
-
-                       ; ")"];
-      !code
-   | App(Sym my_symbol, expr_to_convert) when my_symbol = "string" ->
+   (* | App (Command LogCmd, expression_to_print) ->
+    *    code := Util.str [ !code
+    *                     ; "print("
+    *                     ; generate expression_to_print state
+    *
+    *                     ; ")"];
+    *    !code *)
+   | App(_, Sym (_, my_symbol), expr_to_convert) when my_symbol = "string" ->
       code := Util.str [ !code
                        ; "toString("
                        ; generate expr_to_convert state
                        ; ")"];
       !code
-   | App (e0, e1) ->
+   | App (_, e0, e1) ->
       code := Util.str [ !code
                        ; "callLambda("
                        ; nt ; generate e0 state
@@ -172,7 +166,7 @@ let rec generate (expression: expr) (state: state ref): string =
                        ; nt ; generate e1 state
                        ; ")"];
       !code
-   | Tuple (_children) ->
+   | Tuple (_, _children) ->
       failwith "Think about this now.
 
 What is a tuple concretely? It is a collection which you can match over.
@@ -181,7 +175,7 @@ You get from a tuple by matching `(match <1 2 3> <n0 n1 n2> n2)` => `3`
 
 Until I create match, I don't really have to allocate these
 "
-   | Vector (children) ->
+   | Vector (_, children) ->
      let rec fill_vector children acc =
        (match children with
         | child :: rest ->
@@ -193,7 +187,7 @@ Until I create match, I don't really have to allocate these
        ) in
      code := "makeVector(" ^ (fill_vector children "rrb_create()") ^ ")";
      !code
-   | Dict keys_values ->
+   | Dict (_, keys_values) ->
      let rec fill_dict keys_values acc =
        (match keys_values with
         | (k, v) :: rest ->
@@ -207,7 +201,12 @@ Until I create match, I don't really have to allocate these
        ) in
      code := "makeDict(" ^ (fill_dict keys_values "value_hamt_new()") ^ ")";
      !code
-   | Command _ -> raise (GenerateError "A command should be applied"))
+   | Set (_, _) ->
+      failwith "TODO codegen of set not yet implemented"
+   | Ann (_, _, expression) ->
+      generate expression state
+   | Match (_, _, _) ->
+      failwith "TODO generate a bunch of if/else for this")
 
 let generate_program expression =
   let state = ref { lam_number = 0
@@ -233,7 +232,7 @@ let generate_program expression =
            ; nt ; t; "sizeof(struct global_context), NULL\n"
            ; t ;");\n"
            ; t ;"/* main_code */\n"
-           ; t ; !state.main_code ; ";\n\n"
+           ; t ; "print(toString("; !state.main_code ; "));\n\n"
            ; nt; "return 0;"
            ; n ; "}"
            ; n]
