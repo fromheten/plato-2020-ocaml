@@ -90,7 +90,7 @@ let compile (src: string): (string, string) result =
   match Read.expression
           gensym_env
           (0
-          ,(Read.char_list src)) with
+          ,(Util.char_list src)) with
   | Ok (_rest, expr) ->
      let new_env () = (Type_infer.new_env ()) in
      let env = (new_env ()) in
@@ -242,7 +242,7 @@ let () =
                          ;version]);
   print_newline ();
   match Read.parse_args (0
-                         ,(Read.char_list
+                         ,(Util.char_list
                              (String.concat
                                 " "
                                 (Array.to_list
@@ -301,7 +301,7 @@ let () =
     (* print_string (Cryptokit.hash_channel (Cryptokit.Hash.sha3 512) Stdlib.stdin); *)
      let binary_hash = (Cryptokit.hash_string (Cryptokit.Hash.sha3 512) "Hello") in
      failwith binary_hash
-  (* let hash_id = Platoid.base64_encode (Read.char_list binary_hash) in
+  (* let hash_id = Platoid.base64_encode (Util.char_list binary_hash) in
       * print_string hash_id;
       * print_newline (); *)
   | Ok (_, Read.NoCommandArguments (_pos)) ->

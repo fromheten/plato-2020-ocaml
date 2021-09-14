@@ -39,33 +39,7 @@ let rec from_read_expr read_expr =
                                                  ,(from_read_expr
                                                      body))
 
-let char_list s =
-  let rec exp i l =
-    if i < 0
-    then l
-    else exp (i - 1) (s.[i] :: l)
-  in exp (String.length s - 1) []
 
-let string_of_char_list char_list =
-  Util.str (List.map (String.make 1) char_list)
-
-let is_symbol_char c =
-  not (List.exists
-         (fun x -> x = c)
-         [ ' '
-         ; '\''
-         ; '"'
-         ; '\t'
-         ; '\n'
-         ; '#'
-         ; '('
-         ; ')'
-         ; '<'
-         ; '>'
-         ; '['
-         ; ']'
-         ; '{'
-         ; '}'])
 
 let is_spacing c =
   (List.exists (fun x -> x = c)
@@ -86,10 +60,10 @@ let rec strip_starting_spaces (source: source): source =
 
 let strip_starting_spaces_tests =
   [("strip this should work"
-   ,strip_starting_spaces (0, (char_list " hello\'  ' "))
-    = (1, (char_list "hello\'  ' ")))
+   ,strip_starting_spaces (0, (Util.char_list " hello\'  ' "))
+    = (1, (Util.char_list "hello\'  ' ")))
   ;("strip starting spaces"
-   ,strip_starting_spaces (0, char_list "     hello there")
+   ,strip_starting_spaces (0, Util.char_list "     hello there")
     = (5, ['h'; 'e'; 'l'; 'l'; 'o'; ' '; 't'; 'h'; 'e'; 'r'; 'e']))]
 
 let string_of_position position =
@@ -109,28 +83,28 @@ let symbol (source: source): Expr.expr parseresult =
        failwith "should never happen "
     | (false, (pos, first :: rest)) when first = '\\' ->
        inner (pos + 1, rest) true acc
-    | (false, (pos, first :: rest)) when is_symbol_char first ->
+    | (false, (pos, first :: rest)) when Expr.is_symbol_char first ->
        inner (pos + 1, rest) false (first :: acc)
     | (false, (pos, first :: _rest))
-         when not (is_symbol_char first) && List.length acc > 0 ->
+         when not (Expr.is_symbol_char first) && List.length acc > 0 ->
        Ok (s
-          ,Expr.Sym ((start_pos, pos), string_of_char_list (List.rev acc)))
+          ,Expr.Sym ((start_pos, pos), Util.string_of_char_list (List.rev acc)))
     | (false, (_pos, first :: rest))
-         when not (is_symbol_char first)
+         when not (Expr.is_symbol_char first)
               && List.length acc = 0 ->
        Error (Util.str ["Invalid symbol '"
-                       ;string_of_char_list (first :: rest)
+                       ;Util.string_of_char_list (first :: rest)
                        ;"' from src '"
-                       ;string_of_char_list (snd source)
+                       ;Util.string_of_char_list (snd source)
                        ;"'"])
-    | (true, (pos, first :: rest)) when not (is_symbol_char first) ->
+    | (true, (pos, first :: rest)) when not (Expr.is_symbol_char first) ->
        inner (pos + 1, rest) false (first :: acc)
     | (true, (pos, [])) ->
        Error (Util.str ["escaping EOF. "
                        ;string_of_int pos])
     | (false, (pos, [])) when List.length acc > 0 ->
        Ok ((pos, [])
-          ,Sym ((start_pos, pos), string_of_char_list (List.rev acc)))
+          ,Sym ((start_pos, pos), Util.string_of_char_list (List.rev acc)))
     | ((true, (_, _::_))) -> Error "Should never happen"
     | (false, (_pos, [])) -> Error "`symbol` got an empty string - can't parse that into a Sym"
     | (false, (_pos, _x :: _rest)) -> Error "Lastests option"
@@ -159,13 +133,13 @@ let symbol_native_string =
 let symbol_tests =
   [( "Vectors are not symbols"
    , symbol (0
-            ,(char_list "[ a b c]"))
+            ,(Util.char_list "[ a b c]"))
      = Error "Invalid symbol '[ a b c]' from src '[ a b c]'")
   ; ("little symbol"
-    , symbol (0, (char_list "xyx"))
+    , symbol (0, (Util.char_list "xyx"))
       = Ok ((3, []), Sym ((0, 3), "xyx")))
   ;("long symbol"
-   , symbol (0, (char_list " im-a-symbol the rest of the source string"))
+   , symbol (0, (Util.char_list " im-a-symbol the rest of the source string"))
      = Ok ((12, [' '; 't'; 'h'; 'e'; ' '; 'r'; 'e'; 's'; 't'; ' '; 'o'; 'f'; ' '; 't'; 'h';
                  'e'; ' '; 's'; 'o'; 'u'; 'r'; 'c'; 'e'; ' '; 's'; 't'; 'r'; 'i'; 'n'; 'g'])
           ,Sym ((1, 12)
@@ -184,7 +158,7 @@ let quoted_symbol (source: source) =
              when first = '\'' ->
            Ok ((pos, rest)
               ,Expr.Sym ((start_pos, pos)
-                   ,string_of_char_list (List.rev acc)))
+                   ,Util.string_of_char_list (List.rev acc)))
         | (true, (pos, first :: rest))
              when first = '\'' ->
            inner (pos + 1, rest) false (first :: acc)
@@ -202,7 +176,7 @@ let quoted_symbol (source: source) =
                                   ; string_of_bool is_escaping
                                   ; "\""
                                   ; "s: \""
-                                  ; (string_of_char_list (snd s))
+                                  ; (Util.string_of_char_list (snd s))
                                   ; "\""]))
      in inner
           src_without_preceding_spacings
@@ -231,7 +205,7 @@ let string (source: source): Expr.expr parseresult =
                ,rest)
               ,String ((start_pos
                        ,pos)
-                      ,string_of_char_list (List.rev acc)))
+                      ,Util.string_of_char_list (List.rev acc)))
         | (true, (pos
                  ,first :: rest))
              when first = '"' ->
@@ -252,7 +226,7 @@ let string (source: source): Expr.expr parseresult =
                                   ; string_of_bool is_escaping
                                   ; "\""
                                   ; "s: \""
-                                  ; string_of_char_list (snd s)
+                                  ; Util.string_of_char_list (snd s)
                                   ; " after position: "
                                   ; string_of_int (start_pos)
                                   ; "\""]))
@@ -267,7 +241,7 @@ let string (source: source): Expr.expr parseresult =
 let string_tests =
   [("Strings are parsed"
    , string (0
-            ,char_list "  \"Hello\"  ")
+            ,Util.char_list "  \"Hello\"  ")
      = Ok ((7
            ,[' '; ' '])
           ,String ((2, 7)
@@ -276,28 +250,28 @@ let string_tests =
 let quoted_symbol_test =
   [("Simple quoted symbol with escaped single quote"
    ,quoted_symbol (0
-                  ,char_list "   ' hello\\'  ' ")
+                  ,Util.char_list "   ' hello\\'  ' ")
     = Ok ((14 ,[' '])
          ,Sym ((3, 14)
               ," hello'  ")))
   ;("Quoted symbol without src = single quote should fail"
    ,quoted_symbol (0
-                  ,(char_list "a b c"))
+                  ,(Util.char_list "a b c"))
     = Error "Quoted symbols must begin with a single-quote \"'\"")
   ;("Empty quoted symbols makes no sense"
    ,quoted_symbol
       (0
-      ,(char_list ""))
+      ,(Util.char_list ""))
     = Error "Can't parse empty symbol. Somewhere around position: 0")
   ;("Quoted symbols should src = not parse unless beginning in \"'\""
    ,quoted_symbol (0
-                  ,(char_list "#{ 'sym' }# "))
+                  ,(Util.char_list "#{ 'sym' }# "))
     = Error "Quoted symbols must begin with a single-quote \"'\"")]
 
 let literal (lit: string) (source: source): unit parseresult =
   let lit_list: char list =
     snd (strip_starting_spaces (-1
-                               ,(char_list lit))) in
+                               ,(Util.char_list lit))) in
   let rec inner
             (rest_of_lit: char list)
             (curr_source: source)
@@ -312,7 +286,7 @@ let literal (lit: string) (source: source): unit parseresult =
        Error
          (Util.str
             ["Source '"
-            ;string_of_char_list (snd source)
+            ;Util.string_of_char_list (snd source)
             ;"' not matching literal '"
             ;lit
             ;"'"])
@@ -334,7 +308,7 @@ let literal_tests =
     (literal
        "a"
        (0
-       ,(char_list "    aaa")))
+       ,(Util.char_list "    aaa")))
     = Ok ((5
           ,['a'; 'a'])
          ,()))
@@ -342,7 +316,7 @@ let literal_tests =
     (literal
        "["
        (0
-       ,(char_list "#{")))
+       ,(Util.char_list "#{")))
     = Error "Source '#{' not matching literal '['")]
 
 let andThen p0 p1 (source: source) =
@@ -383,7 +357,7 @@ let n_or_more_tests =
    , n_or_more
        4
        (literal "a")
-       (0 ,(char_list "   aaaaaa "))
+       (0 ,(Util.char_list "   aaaaaa "))
      = Ok ((9, [' '])
 	  ,[(); (); (); (); (); ()]))]
 
@@ -396,7 +370,7 @@ let orElse p0 p1 (source: source) =
                  | Error e1 ->
                     Error (Util.str
                              [ "orElse Error src: '"
-                             ; string_of_char_list (snd source)
+                             ; Util.string_of_char_list (snd source)
                              ; "'. position: "
                              ; string_of_int (fst source)
                              ; "\ne0:'"
@@ -431,7 +405,7 @@ let vector
 let vector_tests =
   [("this is not a vector",
     vector symbol (0
-                  ,(char_list "#{ []}#"))
+                  ,(Util.char_list "#{ []}#"))
     = Error "Source '#{ []}#' not matching literal '['")]
 
 let set
@@ -452,20 +426,20 @@ let set
 
 let set_tests =
   [("empty set"
-   ,set symbol (0, (char_list "#{}# ok"))
+   ,set symbol (0, (Util.char_list "#{}# ok"))
     = Ok ((4
           ,[' '; 'o'; 'k'])
          ,Set ((0,4)
               ,[])))
   ;("set of sets"
    ,set (set symbol) (0
-                     ,(char_list "#{#{}# #{}#}#"))
+                     ,(Util.char_list "#{#{}# #{}#}#"))
     = Ok ((13, [])
         , Set ((0, 13)
              , [Set ((2, 6), [])
                ;Set ((6, 11), [])])))
   ;("set of symbol"
-   ,set symbol (0, (char_list "#{hello}#"))
+   ,set symbol (0, (Util.char_list "#{hello}#"))
     = Ok ((9
           ,[])
         , Set ((0, 9), [Sym ((2, 7), "hello")])))
@@ -473,7 +447,7 @@ let set_tests =
    ,set
       (orElse symbol quoted_symbol)
       (0
-      ,(char_list "#{'quoted sym' unquoted}# rest of src"))
+      ,(Util.char_list "#{'quoted sym' unquoted}# rest of src"))
     = Ok
         ((24
          ,[' '; 'r'; 'e'; 's'; 't'; ' '; 'o'; 'f'; ' '; 's'; 'r'; 'c']),
@@ -481,7 +455,7 @@ let set_tests =
              ,[Sym ((2, 13), "quoted sym")
               ;Sym ((14, 22), "unquoted")])))
   ;("set of a quoted sym"
-   ,set quoted_symbol (0, (char_list "#{ 'sym' }# "))
+   ,set quoted_symbol (0, (Util.char_list "#{ 'sym' }# "))
     = Ok ((10, [' '])
          ,Set ((0, 10)
               ,[Sym ((3, 7)
@@ -572,11 +546,11 @@ let deep_lambda (expr: source -> Expr.expr parseresult) (source: source) =
 
 let lambda_tests =
   [("λ parse identity"
-   ,lambda symbol (0, (char_list "  (λ x x)"))
+   ,lambda symbol (0, (Util.char_list "  (λ x x)"))
     (* The indexes are a bit off but whatever *)
     = Ok ((10, []), Lam ((0, 10), [(PSym ((6, 7), "x"), Sym ((8, 9), "x"))])))
   ;("λ multiple patterns"
-   ,lambda symbol (0, (char_list "(λ
+   ,lambda symbol (0, (Util.char_list "(λ
                                   x x
                                   y y)"))
     = Ok ((80, []),
@@ -594,7 +568,7 @@ let lambda_tests =
                (PSym ((0, 0), "a"),
                 Lam ((0, 1), [(PSym ((0, 0), "b"), Sym ((0, 0), "a"))]))])))
   ; ( "Deep lambda"
-    , deep_lambda symbol (0, (char_list "(λ [x y] x)"))
+    , deep_lambda symbol (0, (Util.char_list "(λ [x y] x)"))
       = Ok
           ((12, []),
            Lam ((12, 13),
@@ -631,7 +605,7 @@ let ttuple (typ: source -> Type_infer.Type.t parseresult) source: Type_infer.Typ
 
 let ttuple_tests =
   [("ttuple ttuple ttuple"
-   , ttuple tunit (0, (char_list "< <>  <> > ]"))
+   , ttuple tunit (0, (Util.char_list "< <>  <> > ]"))
      = Ok ((9, [' ';']'])
           ,Type_infer.my_Tuple [Type_infer.my_Unit; Type_infer.my_Unit]))]
 
@@ -835,149 +809,46 @@ let comp f g x = f (g x)
 
 let string_of_quoted_symbol s = Util.str ["\""; s; "\""]
 
-let string_of_sym s =
-  let s_list = (char_list s) in
-  if (List.exists (comp not is_symbol_char) s_list)
-  then ['"'] @ s_list @ ['"']
-  else s_list
-
-let string_of_pattern string_of_value = function
-  | Expr.PSym (_pos, s) ->
-     string_of_sym s
-  | Expr.PTag (_pos, tag, value) ->
-     ['(']
-     @ string_of_sym tag
-     @ [' ']
-     @ string_of_value value
-     @ [')']
-
-let rec string_of_expr gensym_env =
-  function
-  | Expr.Let (_pos, name, definition, body) ->
-     char_list (Printf.sprintf "(let %s %s\n  %s)"
-                  name
-                  (string_of_char_list (string_of_expr gensym_env definition))
-                  (string_of_char_list (string_of_expr gensym_env body)))
-  | Letrec (_pos, name, definition, body) ->
-     char_list (Printf.sprintf "(letrec %s %s\n  %s)"
-                  name
-                  (string_of_char_list (string_of_expr gensym_env definition))
-                  (string_of_char_list (string_of_expr gensym_env body)))
-  | U8 (_pos, i) ->
-     ['('; 'u'; '8';' ']
-     @ char_list (string_of_int i)
-     @ [')']
-  | Sym (_pos, s) ->
-     string_of_sym s
-  | Expr.Lam (_pos, patterns_exprs) ->
-     (char_list "(λ ")
-     @ List.concat
-         (List.concat
-            (List.map (function
-                 | Expr.PTag (_ptag_pos, name, child), expr ->
-                    [['(']
-                    ;char_list name
-                    ;[' ']
-                    ;string_of_expr gensym_env child
-                    ;[')']
-                    ;[' ']
-                    ;string_of_expr gensym_env expr]
-                 | (PSym (_psym_pos, x) ,expr) ->
-                    [string_of_expr gensym_env (Sym (_psym_pos, x))
-                    ;[' ']
-                    ;string_of_expr gensym_env expr]
-               )
-               patterns_exprs))
-     @ [')']
-  | App (_pos, e0, e1) ->
-     ['(']
-     @ string_of_expr gensym_env e0
-     @ [' ']
-     @ string_of_expr gensym_env e1
-     @ [')']
-  | Match (_pos, x, cases) ->
-     ['(']
-     @ char_list "match "
-     @ string_of_expr gensym_env x
-     @ List.concat
-         (List.map (fun (pattern, expr) ->
-              [' ']
-              @ string_of_pattern (string_of_expr gensym_env) pattern
-            @ [' ']
-            @ string_of_expr gensym_env expr)
-            cases)
-     @ [')']
-  | String (_pos, s) ->
-     ['"'] @ char_list s @ ['"']
-  | Tuple (_pos, exprs) ->
-     ['<']
-     @ List.concat (List.map (string_of_expr gensym_env) exprs)
-     @ ['>']
-  | Unit _pos ->
-     ['<'; '>']
-  | Vector (_pos, exprs) ->
-     ['[']
-     @ List.concat (List.map (string_of_expr gensym_env) exprs)
-     @ [']']
-  | Set (_pos, exprs) ->
-     ['#'; '{']
-     @ List.concat (List.map (string_of_expr gensym_env) exprs)
-     @ ['}'; '#']
-  | Ann (_pos, t, e) ->
-     char_list "(Ann "
-     @ char_list (Type_infer.Type.to_string gensym_env t)
-     @ char_list " "
-     @ string_of_expr gensym_env e
-  | Dict (_pos, keys_and_vals) ->
-     char_list "{"
-     @ List.concat
-         (List.map
-            (fun (key, value) -> string_of_expr gensym_env key
-                                 @ string_of_expr gensym_env value
-                                 @ char_list "\n ")
-            keys_and_vals)
-     @ char_list "}"
-
 let expression_tests =
   [ ( "Why does this symbol not end at the space?"
-    , expression (Type_infer.new_env ()) (0, (char_list "hello#{}#"))
+    , expression (Type_infer.new_env ()) (0, (Util.char_list "hello#{}#"))
       = Ok ((5,['#'; '{'; '}'; '#'])
            ,Sym ((0, 5), "hello")))
   ; ( "Set of stuff"
-    , expression (Type_infer.new_env ()) (0, (char_list "#{ hello there}#"))
+    , expression (Type_infer.new_env ()) (0, (Util.char_list "#{ hello there}#"))
       = Ok ((16, []),
             Set ((0, 16), [Sym ((3, 8), "hello"); Sym ((9, 14), "there")])))
   ; ( "Set of vector"
-    , expression (Type_infer.new_env ()) (0, (char_list "#{ []}# "))
+    , expression (Type_infer.new_env ()) (0, (Util.char_list "#{ []}# "))
       = Ok ((7, [' ']), Set ((0, 7), [Vector ((2, 5), [])])))
   ; ( "Unit"
-    , expression (Type_infer.new_env ()) (0, (char_list "  <> "))
+    , expression (Type_infer.new_env ()) (0, (Util.char_list "  <> "))
       = Ok ((4, [' ']), Unit (0, 4)))
   ; ( "Full tuple"
-    , expression (Type_infer.new_env ()) (0, char_list "<hello <>> ")
+    , expression (Type_infer.new_env ()) (0, Util.char_list "<hello <>> ")
       = Ok ((10, [' '])
            ,Tuple ((0, 10), [Sym ((1, 6), "hello"); Unit (6, 9)])))
   ; ("parse K"
-    , expression (Type_infer.new_env ()) (0, char_list "(λ x (λ y x))")
+    , expression (Type_infer.new_env ()) (0, Util.char_list "(λ x (λ y x))")
       = Ok
           ((15, []),
            Lam ((0, 15),
                 [(PSym ((4, 5), "x"),
                   Lam ((5, 14), [(PSym ((10, 11), "y"), Sym ((12, 13), "x"))]))])))
   ; ("Annotate Unit"
-    , expression (Type_infer.new_env ()) (0, char_list "(: <> <>)")
+    , expression (Type_infer.new_env ()) (0, Util.char_list "(: <> <>)")
       = Ok ((9, [])
            ,Ann ((0, 9)
                 ,Type_infer.my_Unit
                 ,Unit (5, 8))))
   ; ("Deep λ"
-    , expression (Type_infer.new_env ()) (0, char_list "(λ [x y] x)")
+    , expression (Type_infer.new_env ()) (0, Util.char_list "(λ [x y] x)")
       = Ok ((12, []),
             Lam ((12, 13),
                  [(PSym ((5, 6), "x"),
                    Lam ((12, 13), [(PSym ((7, 8), "y"), Sym ((10, 11), "x"))]))])))
   ; ("Advanced K annotation"
-    , expression (Type_infer.new_env ()) (0, char_list "(: (-> X Y X) (λ [x y] x))")
+    , expression (Type_infer.new_env ()) (0, Util.char_list "(: (-> X Y X) (λ [x y] x))")
       = Ok
         ((27, []),
          Ann ((0, 27),
@@ -995,7 +866,7 @@ let expression_tests =
                    [(PSym ((19, 20), "x"),
                      Lam ((26, 27), [(PSym ((21, 22), "y"), Sym ((24, 25), "x"))]))]))))
   ; ("Apply annotated K"
-    , expression (Type_infer.new_env ()) (0, char_list "((: (-> X Y X) (λ [x y] x)) 音 '沈黙')")
+    , expression (Type_infer.new_env ()) (0, Util.char_list "((: (-> X Y X) (λ [x y] x)) 音 '沈黙')")
       = Ok
         ((41, []),
          App ((0, 41),
@@ -1018,7 +889,7 @@ let expression_tests =
               Sym ((33, 40), "沈黙"))))
 
   ; ( "FAILURE?? Nested applications happen in order"
-    , application (expression (Type_infer.new_env ())) (0, char_list "(x (y z) (a b) c)")
+    , application (expression (Type_infer.new_env ())) (0, Util.char_list "(x (y z) (a b) c)")
       = Ok
           ((17, []),
            App ((0, 17),        (* (((x (y z))) (a b) c) *)
@@ -1028,10 +899,10 @@ let expression_tests =
                      App ((8, 14), Sym ((10, 11), "a"), Sym ((12, 13), "b"))),
                 Sym ((15, 16), "c"))))
   ; ("Strings are parsed as expressions"
-    , expression (Type_infer.new_env ()) (0, char_list "  \"Hello\"  ")
+    , expression (Type_infer.new_env ()) (0, Util.char_list "  \"Hello\"  ")
       = Ok ((7, [' '; ' ']), String ((2, 7), "Hello")))
   ; ("Application and typ vars"
-    , expression (Type_infer.new_env ()) (0, char_list "((λ x (λ y x)) \"first\" \"second\")")
+    , expression (Type_infer.new_env ()) (0, Util.char_list "((λ x (λ y x)) \"first\" \"second\")")
       = Ok ((30, []),
             App ((0, 30),
                  App ((0, 30),
@@ -1041,11 +912,11 @@ let expression_tests =
                       String ((17, 22), "first")),
                  String ((23, 29), "second"))))
   ; ("parse u8"
-    , expression (Type_infer.new_env ()) (0, char_list "  (u8 1337)")
+    , expression (Type_infer.new_env ()) (0, Util.char_list "  (u8 1337)")
       = Ok ((11, [])
            ,U8 ((6, 10), 1337)))
   ; ("You know what they say about men with large vocabularies? They also have a large Dict"
-    , dict (expression (Type_infer.new_env ())) (0, char_list "{\"ichi\" 1 \"ni\" 2 \"san\" 3}")
+    , dict (expression (Type_infer.new_env ())) (0, Util.char_list "{\"ichi\" 1 \"ni\" 2 \"san\" 3}")
       = Ok ((19, []),
             Dict ((0, 19),
                   [(String ((1, 5), "ichi"), Sym ((6, 7), "1"));
@@ -1056,7 +927,7 @@ let typ_tests =
   [("Longbow arrows"
    , typ
        (Type_infer.new_env ())
-       (0, char_list "(-> X Y X)")
+       (0, Util.char_list "(-> X Y X)")
      = Ok
        ((10, []),
         Type_infer.Type.TyOp
@@ -1073,28 +944,28 @@ let typ_tests =
 
 let src_to_src src =
   Util.take_ok
-    (Util.comp (string_of_expr (Type_infer.new_env ())) Util.second)
+    (Util.comp (Expr.string_of_expr (Type_infer.new_env ())) Util.second)
     (expression
        (Type_infer.new_env ())
-       (0, (char_list src)))
+       (0, (Util.char_list src)))
 
 let src_to_src_test src =
   src_to_src src
-  = Ok (char_list src)
+  = Ok src
 
 let string_of_expr_tests =
   [("string of quoted symbol"
-   ,string_of_expr
+   ,Expr.string_of_expr
        (Type_infer.new_env ())
        (Sym ((0, 0), " I'm a quoted symbol"))
-    = (char_list "\" I'm a quoted symbol\""))
+    = "\" I'm a quoted symbol\"")
   ;("string of lambda"
    ,src_to_src "(λ x (λ y x))"
-    = Ok (char_list "(λ x (λ y x))"))
+    = Ok "(λ x (λ y x))")
   ;("string of app"
    ,let src = "(((λ x (λ y x)) \"first\") \"second\")" in
     src_to_src src
-    = Ok (char_list src))]
+    = Ok src)]
 
 type io_paths =
   { input_files: string list
@@ -1215,14 +1086,14 @@ let parse_args_tests =
   [("Print test results"
    , let src = "platoc --test-results" in
      parse_args (0
-                ,(char_list src))
+                ,(Util.char_list src))
      = let pos = (0, String.length src) in
        Ok ((snd pos, [])
           ,ShowPrintTests pos))
   ;("Output C file"
    , let src = "platoc --output-c myfile.c mysource.plato" in
      parse_args (0
-                ,(char_list src))
+                ,(Util.char_list src))
      = let pos = (0, String.length src) in
        Ok ((snd pos, [])
           ,OutputCToPath (pos, {input_files = ["mysource.plato"]

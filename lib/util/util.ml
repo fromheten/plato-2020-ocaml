@@ -26,6 +26,16 @@ let list_result_of_result_list ress =
 
 let str = String.concat ""
 
+let char_list s =
+  let rec exp i l =
+    if i < 0
+    then l
+    else exp (i - 1) (s.[i] :: l)
+  in exp (String.length s - 1) []
+
+let string_of_char_list char_list =
+  str (List.map (String.make 1) char_list)
+
 let println strings =
   print_string (str strings);
   print_newline ()
