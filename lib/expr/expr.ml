@@ -15,7 +15,7 @@ type expr =
   | Unit of position
   | Vector of position * expr list
   | Set of position * expr list
-  | Ann of position * Type_infer.Type.t * expr
+  | Ann of position * Type.Type.t * expr
   | Dict of position * (expr * expr) list
   | Match of position * expr * (expr pattern * expr) list
   | Let of position * string * expr * expr
@@ -134,7 +134,7 @@ let rec string_of_expr (gensym_env): expr -> string =
       * @ ['}'; '#'] *)
   | Ann (_pos, t, e) ->
      Printf.sprintf "(Ann %s %s)"
-       (Type_infer.Type.to_string gensym_env t)
+       (Type.Type.to_string gensym_env t)
        (string_of_expr gensym_env e)
      (* Util.char_list "(Ann "
       * @ Util.char_list (Type_infer.Type.to_string gensym_env t)

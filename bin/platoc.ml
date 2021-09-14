@@ -86,31 +86,31 @@ let cmdise = function
      cmdise can only handle programs that begin with applying Log"
 
 let compile (src: string): (string, string) result =
-  let gensym_env = (Type_infer.new_env ()) in
+  let gensym_env = (Type.new_env ()) in
   match Read.expression
           gensym_env
           (0
           ,(Util.char_list src)) with
   | Ok (_rest, expr) ->
-     let new_env () = (Type_infer.new_env ()) in
+     let new_env () = (Type.new_env ()) in
      let env = (new_env ()) in
      let stdlib =
-       [("Bool", Type_infer.Type.TyTagUnion (["True", Type_infer.my_Unit
+       [("Bool", Type.Type.TyTagUnion (["True", Type_infer.my_Unit
                                              ;"False", Type_infer.my_Unit]))
-       ;("Command", Type_infer.Type.TyTagUnion
-                      (["Log", Type_infer.Function.create
+       ;("Command", Type.Type.TyTagUnion
+                      (["Log", Type.Function.create
 
                                  Type_infer.my_String
                                  Type_infer.my_Unit]))
-       ;("string", Type_infer.Function.create (Type_infer.ty_var env) Type_infer.my_String)
+       ;("string", Type.Function.create (Type_infer.ty_var env) Type_infer.my_String)
         (* ("Bool", Type_infer.my_Bool) *)] in
      (match
         (match (Type_infer.analyze_result
                   env
                   stdlib
-                  (Read.from_read_expr expr)) with
-         | Ok typ -> Printf.printf "\nType: %s\n" (Type_infer.Type.to_string (new_env ()) typ);
-                     Ok (Type_infer.Type.to_string (new_env ()) typ)
+                  expr) with
+         | Ok typ -> Printf.printf "\nType: %s\n" (Type.Type.to_string (Type.new_env ()) typ);
+                     Ok (Type.Type.to_string (new_env ()) typ)
          | Error e -> Error e) with
       | Ok _typ -> (match codegen_expr expr with
                    | Ok codegen_expr ->
@@ -140,8 +140,8 @@ let compile (src: string): (string, string) result =
         *        stdlib
         *        (Type_infer.Expr.from_read_expr expr))
         *     (fun typ ->
-        *       Printf.printf "Type: %s\n" (Type_infer.Type.to_string (new_env ()) typ);
-        *       Ok (Type_infer.Type.to_string (new_env ()) typ))
+        *       Printf.printf "Type: %s\n" (Type.Type.to_string (new_env ()) typ);
+        *       Ok (Type.Type.to_string (new_env ()) typ))
         *     (fun error ->
         *       (try raise error
         *        with | Type_infer.ParseError e | Type_infer.TypeError e ->
