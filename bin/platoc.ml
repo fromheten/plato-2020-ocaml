@@ -37,7 +37,7 @@ let rec codegen_expr: (Expr.expr -> (Codegen.expr, string) result) = function
   | Expr.String (_pos, s) ->
      Ok (Codegen.String s)
   | Expr.U8 (_pos, n) ->
-     Ok (Codegen.Integer n)
+     Ok (Codegen.U8 n)
   | Expr.Tuple (_pos, children) ->
      let codegenned_children =
        (Util.list_result_of_result_list

@@ -34,7 +34,7 @@ type expr =
   | Lam of string * expr
   | Sym of string
   | String of string
-  | Integer of int
+  | U8 of int
   | Command of cmd
   | Tuple of expr list
   | Let of string * expr * expr
@@ -145,7 +145,7 @@ let rec generate (expression: expr) (state: state ref): string =
                        ; string
                        ; "\")"];
       !code
-   | Integer i ->
+   | U8 i ->
       code := Util.str [ !code
                        ; "makeU8("
                        ; string_of_int i
