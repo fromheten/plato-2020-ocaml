@@ -96,8 +96,31 @@ let rec analyse gensym_state node (env: (string * Type.Type.t) list) non_generic
       new_type_param
     in
     my_Dict (unify_many keys) (unify_many values)
-  | (Tuple (_, _)|Set (_, _)|Match (_, _, _)) ->
-    failwith "Not yet implemented"
+  | Match (_pos, _x, []) ->
+    failwith "Match with no cases makes no sense"
+  | Match (_pos, x, cases) ->
+    let new_type = Type.TypeVariable.create gensym_state in
+    let new_type_param = Type.Type.TyVar new_type in
+    (* (match x
+              y y
+              z z)
+     * Return type is type of `((λ y y) x)` and `((λ z z) x)` given they are equal *)
+    let appize x case = Expr.App ((-1, -1),
+                                  Expr.Lam ((-1,-1),
+                                            [case]),
+                                  x) in
+    let cases_appized_types = cases
+                              |> List.map (appize x)
+                              |> List.map
+                                   (fun expr ->
+                                     analyse gensym_state expr env non_generic) in
+    List.iter
+      (fun ty ->
+        unify gensym_state new_type_param ty;)
+      cases_appized_types;
+    new_type_param
+  | (Tuple (_, _)|Set (_, _)) ->
+    failwith "TODO `analyze` not yet implemented"
 and string_of_context env =
   let rec inner acc = function
     | (name, typ) :: rest ->
