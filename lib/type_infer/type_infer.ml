@@ -1,3 +1,8 @@
+(* GREAT reading resources on type inferrence:
+ * http://www.cs.tau.ac.il/~msagiv/courses/pl15/hindley_milner.change_to_py
+ * https://www.cs.cornell.edu/courses/cs3110/2011sp/Lectures/lec26-type-inference/type-inference.htm
+*)
+
 let rec pow a = function
   | 0 -> 1
   | 1 -> a
