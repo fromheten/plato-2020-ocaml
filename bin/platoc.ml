@@ -10,14 +10,13 @@ let compile (src: string): (string, string) result =
      let new_env () = (Type.new_gensym_state ()) in
      let env = (new_env ()) in
      let stdlib =
-       [("Bool", Type.Type.TyTagUnion (["True", Type_infer.my_Unit
-                                             ;"False", Type_infer.my_Unit]))
-       ;("Command", Type.Type.TyTagUnion
-                      (["Log", Type.Function.create
-
-                                 Type_infer.my_String
-                                 Type_infer.my_Unit]))
-       ;("string", Type.Function.create (Type_infer.ty_var env) Type_infer.my_String)
+       [("Bool", Type.Type.TyTagUnion (["True", Type.tUnit
+                                             ;"False", Type.tUnit]))
+       ;("Command", Type.Type.TyTagUnion (["Log",
+                                           Type.tArrow
+                                             Type.tString
+                                             Type.tUnit]))
+       ;("string", Type.tArrow (Type_infer.ty_var env) Type.tString)
         (* ("Bool", Type_infer.my_Bool) *)] in
      (match
         (match (Type_infer.analyze_result

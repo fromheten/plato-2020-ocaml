@@ -76,9 +76,12 @@ end = struct
               |> Printf.sprintf "%s %s" name)
 end
 
-and Function: sig
-  val create: Type.t -> Type.t -> Type.t
-end = struct
-  let create from_type to_type =
-    Type.TyOp ("->", [from_type; to_type])
-end
+let tArrow from_type to_type = Type.TyOp ("->", [from_type; to_type])
+let tU8 = Type.TyOp ("U8", [])
+(* let tBool = Type.TyOp ("Bool", []) *)
+let tString = Type.TyOp ("String", [])
+let tUnit = Type.TyOp ("<>", [])
+let tTuple members = Type.TyOp ("Tuple", members)
+let tVector child = Type.TyOp ("Vector", [child])
+let tSet members = Type.TyOp ("Set", [members])
+let tDict key value = Type.TyOp ("Dict", [key; value])

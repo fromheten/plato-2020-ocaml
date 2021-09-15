@@ -4,22 +4,12 @@ let rec pow a = function
   | n -> let b = pow a (n / 2) in
          b * b * (if n mod 2 = 0 then 1 else a)
 
-let arrow = Type.Function.create
 let ty_var global_env = Type.Type.TyVar (Type.TypeVariable.create global_env)
 let rec zip xl yl =
   match (xl, yl) with
   | (x::xs, y::ys) -> (x, y) :: zip xs ys
   | ([], []) -> []
   | _ -> assert false
-
-let my_U8 = Type.Type.TyOp ("U8", [])
-(* let my_Bool = Type.Type.TyOp ("Bool", []) *)
-let my_String = Type.Type.TyOp ("String", [])
-let my_Unit = Type.Type.TyOp ("<>", [])
-let my_Tuple members = Type.Type.TyOp ("Tuple", members)
-let my_Vector child = Type.Type.TyOp ("Vector", [child])
-let my_Set members = Type.Type.TyOp ("Set", [members])
-let my_Dict key value = Type.Type.TyOp ("Dict", [key; value])
 
 module TVSet = Set.Make(Type.TypeVariable)
 
@@ -38,7 +28,7 @@ let rec analyse gensym_state node (env: (string * Type.Type.t) list) non_generic
      let fun_type = analyse gensym_state fn env non_generic in
      let arg_type = analyse gensym_state arg env non_generic in
      let result_type_param = Type.Type.TyVar (Type.TypeVariable.create gensym_state) in
-     unify gensym_state (Type.Function.create arg_type result_type_param) fun_type;
+     unify gensym_state (Type.tArrow arg_type result_type_param) fun_type;
      result_type_param
   | Expr.Lam (_pos, []) ->
       failwith "Can't type infer lambda without args"
@@ -49,7 +39,7 @@ let rec analyse gensym_state node (env: (string * Type.Type.t) list) non_generic
      let new_env = (v, arg_type_param) :: env in
      let new_non_generic = TVSet.add arg_type non_generic in
      let result_type = analyse gensym_state body new_env new_non_generic in
-     Type.Function.create arg_type_param result_type
+     Type.tArrow arg_type_param result_type
   | Expr.Lam (_, (PTag (_, _, _), _)::_) ->
     failwith "TODO can't yet type check functions of patterns"
   | Expr.Let (_pos, v, defn, body) ->
@@ -68,13 +58,13 @@ let rec analyse gensym_state node (env: (string * Type.Type.t) list) non_generic
      analyse gensym_state body new_env non_generic
   | Expr.Unit _pos -> assert false
   | Expr.U8 (_n, _pos) ->
-    my_U8
+    Type.tU8
   | Expr.Ann (_pos, expected_typ, given_expr) ->
     let given_expr_type = analyse gensym_state given_expr env non_generic in
     unify gensym_state expected_typ given_expr_type;
     given_expr_type
-  | Expr.String (_pos, _s) -> my_String
-  (* | Expr.None _pos -> my_Unit *)
+  | Expr.String (_pos, _s) -> Type.tString
+  (* | Expr.None _pos -> tUnit *)
   | Expr.Vector (_pos, xs) ->
     let new_type = Type.TypeVariable.create gensym_state in
     let new_type_param = Type.Type.TyVar new_type in
@@ -82,7 +72,7 @@ let rec analyse gensym_state node (env: (string * Type.Type.t) list) non_generic
     List.iter (fun ty ->
         unify gensym_state new_type_param ty;)
       (xs_types);
-    my_Vector new_type_param
+    Type.tVector new_type_param
   | Expr.Dict (_pos, key_value_pairs) ->
     let keys = List.map fst key_value_pairs in
     let values = List.map snd key_value_pairs in
@@ -95,7 +85,7 @@ let rec analyse gensym_state node (env: (string * Type.Type.t) list) non_generic
         (xs_types);
       new_type_param
     in
-    my_Dict (unify_many keys) (unify_many values)
+    Type.tDict (unify_many keys) (unify_many values)
   | Match (_pos, _x, []) ->
     failwith "Match with no cases makes no sense"
   | Match (_pos, x, cases) ->
@@ -156,7 +146,7 @@ and get_type global_env name context non_generic =
          (List.assoc name context)
          non_generic
   else if is_integer_literal name
-  then my_U8
+  then Type.tU8
   else if context_contains_constructor context name
   then match (find_enum_matching_ctor context name) with
        | Some enum_type ->
@@ -343,15 +333,15 @@ let type_infer_tests =
  *   let var3 = Type.Type.TyVar (Type.TypeVariable.create ()) in
  *   let my_env =
  *     StringMap.empty
- *     |> StringMap.add "pair" (Type.Function.create var1 (Type.Function.create var2 pair_type))
+ *     |> StringMap.add "pair" (Type.tArrow var1 (Type.tArrow var2 pair_type))
  *     |> StringMap.add "true" my_bool
  *     |> StringMap.add "cond"
- *          (Type.Function.create my_bool
- *             (Type.Function.create var3
- *                (Type.Function.create var3 var3)))
- *     |> StringMap.add "zero" (Type.Function.create my_int my_bool)
- *     |> StringMap.add "pred" (Type.Function.create my_int my_int)
- *     |> StringMap.add "times" (Type.Function.create my_int (Type.Function.create my_int my_int))
+ *          (Type.tArrow my_bool
+ *             (Type.tArrow var3
+ *                (Type.tArrow var3 var3)))
+ *     |> StringMap.add "zero" (Type.tArrow my_int my_bool)
+ *     |> StringMap.add "pred" (Type.tArrow my_int my_int)
+ *     |> StringMap.add "times" (Type.tArrow my_int (Type.tArrow my_int my_int))
  *   in let pair =
  *        (Expr.Apply
  *           ((Expr.Apply

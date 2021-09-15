@@ -546,7 +546,7 @@ let tunit (source: source): Type.Type.t parseresult =
      (Util.take_ok
         (fun ((end_pos, rest), ((), ()))
          -> ((end_pos, rest)
-            ,Type_infer.my_Unit))))
+            ,Type.tUnit))))
     source
 
 let tunit_tests =
@@ -554,7 +554,7 @@ let tunit_tests =
    ,tunit (0
           ,['<'; '>'])
     = Ok ((2,[])
-         ,Type_infer.my_Unit))]
+         ,Type.tUnit))]
 
 let ttuple (typ: source -> Type.Type.t parseresult) source: Type.Type.t parseresult =
   (map (andThen (andThen (literal "<")
@@ -563,14 +563,14 @@ let ttuple (typ: source -> Type.Type.t parseresult) source: Type.Type.t parseres
      (Util.take_ok
         (fun ((end_pos, rest)
              ,(((), members), ())) ->
-          ((end_pos, rest), (Type_infer.my_Tuple members)))))
+          ((end_pos, rest), (Type.tTuple members)))))
     source
 
 let ttuple_tests =
   [("ttuple ttuple ttuple"
    , ttuple tunit (0, (Util.char_list "< <>  <> > ]"))
      = Ok ((9, [' ';']'])
-          ,Type_infer.my_Tuple [Type_infer.my_Unit; Type_infer.my_Unit]))]
+          ,Type.tTuple [Type.tUnit; Type.tUnit]))]
 
 let tarrow (typ: source -> Type.Type.t parseresult) source : Type.Type.t parseresult =
   (map (andThen (andThen (andThen
@@ -583,7 +583,7 @@ let tarrow (typ: source -> Type.Type.t parseresult) source : Type.Type.t parsere
           let rec arrowise = function
             | t :: [] -> t
             | t :: rest ->
-              (Type.Function.create t (arrowise rest))
+              (Type.tArrow t (arrowise rest))
             | [] -> failwith "arrowise should not get empty input"
           in ((end_pos, rest)
              ,arrowise the_types))))
@@ -604,7 +604,7 @@ let tsym global_env source: Type.Type.t parseresult =
 let tu8: source -> 'a parseresult =
   (map
      (literal "U8")
-     (Util.take_ok (fun (state, ()) -> (state, Type_infer.my_U8))))
+     (Util.take_ok (fun (state, ()) -> (state, Type.tU8))))
 
 let rec typ global_env src : Type.Type.t parseresult =
   (orElse_list [tarrow (typ global_env)
@@ -802,7 +802,7 @@ let expression_tests =
     , expression (Type.new_gensym_state ()) (0, Util.char_list "(: <> <>)")
       = Ok ((9, [])
            ,Ann ((0, 9)
-                ,Type_infer.my_Unit
+                ,Type.tUnit
                 ,Unit (5, 8))))
   ; ("Deep λ"
     , expression (Type.new_gensym_state ()) (0, Util.char_list "(λ [x y] x)")
