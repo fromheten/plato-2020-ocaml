@@ -43,53 +43,42 @@ module rec TypeVariable : sig
   let equal tv1 tv2 = tv1.id = tv2.id
 end
 
-   and TypeOperator: sig
-     type t = string * Type.t list (* name, types. Think unification algorithm! *)
-     val create: string -> Type.t list -> t
-     val to_string: gensym_state -> t -> string
-   end = struct
-     type t = string * Type.t list
-     let create n tl = (n, tl)
-     let to_string gensym_state = function
-         (name, types) ->
-         (match types with
-          | [] -> name
-          | hd::tl::[] ->
-             Printf.sprintf "(%s %s %s)"
-               name
-               (Type.to_string gensym_state hd)
-               (Type.to_string gensym_state tl)
-          | _ -> types
-                 |> List.map (Type.to_string gensym_state)
-                 |> List.fold_left (fun a b -> a ^ " " ^ b) ""
-                 |> Printf.sprintf "%s %s" name)
-   end
+and Type : sig
+  type t = TyVar of TypeVariable.t
+         | TyTag of (string * t)
+         | TyTagUnion of (string * t) list
+         | TyOp of string * Type.t list (* name, types. Think unification algorithm! *)
+  val to_string: gensym_state -> t -> string
+end = struct
+  type t = TyVar of TypeVariable.t
+         | TyTag of (string * t)
+         | TyTagUnion of (string * t) list
+         | TyOp of string * Type.t list (* name, types. Think unification algorithm! *)
+  let rec to_string gensym_state = function
+    | TyVar tv -> TypeVariable.to_string gensym_state tv ^ "-" ^ string_of_int tv.id ^ tv.name
+    | TyTag (tag, tagged_typ) ->
+      "(" ^ tag ^ " " ^ to_string gensym_state tagged_typ ^ ")"
+    | TyTagUnion cases ->
+      "(union " ^ String.concat " " (List.map
+                                       (to_string gensym_state)
+                                       (List.map (fun x -> TyTag x) cases))
+    | TyOp (name, types) ->
+      (match types with
+       | [] -> name
+       | hd::tl::[] ->
+         Printf.sprintf "(%s %s %s)"
+           name
+           (Type.to_string gensym_state hd)
+           (Type.to_string gensym_state tl)
+       | _ -> types
+              |> List.map (Type.to_string gensym_state)
+              |> List.fold_left (fun a b -> a ^ " " ^ b) ""
+              |> Printf.sprintf "%s %s" name)
+end
 
-   and Type : sig
-     type t = TyVar of TypeVariable.t
-            | TyTag of (string * t)
-            | TyTagUnion of (string * t) list
-            | TyOp of TypeOperator.t
-     val to_string: gensym_state -> t -> string
-   end = struct
-     type t = TyVar of TypeVariable.t
-            | TyTag of (string * t)
-            | TyTagUnion of (string * t) list
-            | TyOp of TypeOperator.t
-     let rec to_string gensym_state = function
-       | TyVar tv -> TypeVariable.to_string gensym_state tv ^ "-" ^ string_of_int tv.id ^ tv.name
-       | TyTag (tag, tagged_typ) ->
-          "(" ^ tag ^ " " ^ to_string gensym_state tagged_typ ^ ")"
-       | TyTagUnion cases ->
-          "(union " ^ String.concat " " (List.map
-                                           (to_string gensym_state)
-                                           (List.map (fun x -> TyTag x) cases))
-       | TyOp top -> TypeOperator.to_string gensym_state top
-   end
-
-   and Function: sig
-     val create: Type.t -> Type.t -> Type.t
-   end = struct
-     let create from_type to_type =
-       Type.TyOp ("->", [from_type; to_type])
-   end
+and Function: sig
+  val create: Type.t -> Type.t -> Type.t
+end = struct
+  let create from_type to_type =
+    Type.TyOp ("->", [from_type; to_type])
+end

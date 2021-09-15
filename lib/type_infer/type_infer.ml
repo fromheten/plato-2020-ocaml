@@ -12,14 +12,14 @@ let rec zip xl yl =
   | ([], []) -> []
   | _ -> assert false
 
-let my_U8 = Type.Type.TyOp (Type.TypeOperator.create "U8" [])
-(* let my_Bool = Type.Type.TyOp (Type.TypeOperator.create "Bool" []) *)
-let my_String = Type.Type.TyOp (Type.TypeOperator.create "String" [])
-let my_Unit = Type.Type.TyOp (Type.TypeOperator.create "<>" [])
-let my_Tuple members = Type.Type.TyOp (Type.TypeOperator.create "Tuple" members)
-let my_Vector child = Type.Type.TyOp (Type.TypeOperator.create "Vector" [child])
-let my_Set members = Type.Type.TyOp (Type.TypeOperator.create "Set" [members])
-let my_Dict key value = Type.Type.TyOp (Type.TypeOperator.create "Dict" [key; value])
+let my_U8 = Type.Type.TyOp ("U8", [])
+(* let my_Bool = Type.Type.TyOp ("Bool", []) *)
+let my_String = Type.Type.TyOp ("String", [])
+let my_Unit = Type.Type.TyOp ("<>", [])
+let my_Tuple members = Type.Type.TyOp ("Tuple", members)
+let my_Vector child = Type.Type.TyOp ("Vector", [child])
+let my_Set members = Type.Type.TyOp ("Set", [members])
+let my_Dict key value = Type.Type.TyOp ("Dict", [key; value])
 
 module TVSet = Set.Make(Type.TypeVariable)
 
@@ -189,9 +189,7 @@ and fresh global_env t non_generic: Type.Type.t =
                           (fun (name, x) -> (name, freshrec x))
                           child_types)
     | Type.Type.TyOp (name, child_types) ->
-       Type.Type.TyOp (Type.TypeOperator.create
-                    name
-                    (List.map (fun x -> freshrec x) child_types))
+       Type.Type.TyOp (name, (List.map (fun x -> freshrec x) child_types))
   in freshrec t
 
 (* Har igång type inferrence som kan göra letrec nu, Hindley Milner.
@@ -232,13 +230,13 @@ TyEnum ("Maybe", ty_var "a", [Ty])
      (* Med OR type operators aka terms, så måste vi istället kolla om den ena eller andra TypeOperator har label som en "child" av den andra. Detta för att "(Just a)" inte är = (Maybe a), men matchar child of (Maybe a).  *)
      if ((top1_name <> top2_name) || (top1_types_size <> top2_types_size))
      then raise (TypeError ("Type mismatch "
-                            ^ (Type.TypeOperator.to_string
+                            ^ (Type.Type.to_string
                                  gensym_state
-                                 (top1_name, top1_types))
+                                 (TyOp (top1_name, top1_types)))
                             ^ " != "
-                            ^ (Type.TypeOperator.to_string
+                            ^ (Type.Type.to_string
                                  gensym_state
-                                 (top2_name, top2_types))));
+                                 (TyOp (top2_name, top2_types)))));
      (* Här kollar den bara om TypeOperators top1 och top2 är lika - men med OR behöver den också kolla om den ena är "child" till den andra, vilket är enkelt som att kolla om List.contains i den ena eller andras children. Kom ihåg, en typ = Sym of string | TypeOperator of string * typ list | TypeOperatorOr of string * typ list.
 
 Så (Maybe a) => (TypeOperatorOr "Maybe" [Sym "a"])
@@ -341,7 +339,7 @@ let type_infer_tests =
     (* let () =
  *   let var1 = Type.Type.TyVar (Type.TypeVariable.create ()) in
  *   let var2 = Type.Type.TyVar (Type.TypeVariable.create ()) in
- *   let pair_type = Type.Type.TyOp (Type.TypeOperator.create "*" [var1; var2]) in
+ *   let pair_type = Type.Type.TyOp ("*", [var1; var2]) in
  *   let var3 = Type.Type.TyVar (Type.TypeVariable.create ()) in
  *   let my_env =
  *     StringMap.empty
