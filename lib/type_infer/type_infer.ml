@@ -170,13 +170,13 @@ and unify gensym_state t1 t2: unit =
   | (Type.Type.TyVar tyvar, _) ->
      if a <> b
      then begin
-         if occurs_in_type tyvar b
-         then raise (TypeError "recursive unification")
-         else tyvar.Type.TypeVariable.instance <- Some b
-       end
-  | (_ (* Type.Type.TyOp(_top) *)
-    , Type.Type.TyVar _tyvar) ->
-     unify gensym_state b a
+       if occurs_in_type tyvar b
+       then raise (TypeError "recursive unification")
+       else tyvar.Type.TypeVariable.instance <- Some b
+     end
+  | (_ (* Type.Type.TyOp(_top) *),
+     Type.Type.TyVar _tyvar) ->
+    unify gensym_state b a
   (* | (Type.Type.TyOp (top1_name, top1_types), Type.Type.TyTag (tytag_name, tytag_type)) -> *)
   (*
 (let Maybe (enum (Maybe a) (Just a) None)
@@ -184,55 +184,55 @@ and unify gensym_state t1 t2: unit =
 TyEnum ("Maybe", ty_var "a", [Ty])
  *)
   | (Type.Type.TyOp (top1_name, top1_types), Type.Type.TyOp (top2_name, top2_types)) ->
-     (* Same names and arity *)
-     let top1_types_size = (List.length top1_types) in
-     let top2_types_size = (List.length top2_types) in
-     (* JESPER! Här kollar vi att båda Terms eller Type Operators (TyOp) har samma namn och antal argument *)
-     (* Med OR type operators aka terms, så måste vi istället kolla om den ena eller andra TypeOperator har label som en "child" av den andra. Detta för att "(Just a)" inte är = (Maybe a), men matchar child of (Maybe a).  *)
-     if ((top1_name <> top2_name) || (top1_types_size <> top2_types_size))
-     then raise (TypeError ("Type mismatch "
-                            ^ (Type.Type.to_string
-                                 gensym_state
-                                 (TyOp (top1_name, top1_types)))
-                            ^ " != "
-                            ^ (Type.Type.to_string
-                                 gensym_state
-                                 (TyOp (top2_name, top2_types)))));
-     (* Här kollar den bara om TypeOperators top1 och top2 är lika - men med OR behöver den också kolla om den ena är "child" till den andra, vilket är enkelt som att kolla om List.contains i den ena eller andras children. Kom ihåg, en typ = Sym of string | TypeOperator of string * typ list | TypeOperatorOr of string * typ list.
+    (* Same names and arity *)
+    let top1_types_size = (List.length top1_types) in
+    let top2_types_size = (List.length top2_types) in
+    (* JESPER! Här kollar vi att båda Terms eller Type Operators (TyOp) har samma namn och antal argument *)
+    (* Med OR type operators aka terms, så måste vi istället kolla om den ena eller andra TypeOperator har label som en "child" av den andra. Detta för att "(Just a)" inte är = (Maybe a), men matchar child of (Maybe a).  *)
+    if ((top1_name <> top2_name) || (top1_types_size <> top2_types_size))
+    then raise (TypeError ("Type mismatch "
+                           ^ (Type.Type.to_string
+                                gensym_state
+                                (TyOp (top1_name, top1_types)))
+                           ^ " != "
+                           ^ (Type.Type.to_string
+                                gensym_state
+                                (TyOp (top2_name, top2_types)))));
+    (* Här kollar den bara om TypeOperators top1 och top2 är lika - men med OR behöver den också kolla om den ena är "child" till den andra, vilket är enkelt som att kolla om List.contains i den ena eller andras children. Kom ihåg, en typ = Sym of string | TypeOperator of string * typ list | TypeOperatorOr of string * typ list.
 
-Så (Maybe a) => (TypeOperatorOr "Maybe" [Sym "a"])
-Och (Just a) => (TypeOperator "Just" [Sym "a"])
-unify (Maybe a) (Just b) => (Maybe a)*)
-     List.iter2 (unify gensym_state) (top1_types) (top2_types)
-(* | _ -> raise (UnificationError "Not unified") *)
+       Så (Maybe a) => (TypeOperatorOr "Maybe" [Sym "a"])
+       Och (Just a) => (TypeOperator "Just" [Sym "a"])
+       unify (Maybe a) (Just b) => (Maybe a)*)
+    List.iter2 (unify gensym_state) (top1_types) (top2_types)
+  (* | _ -> raise (UnificationError "Not unified") *)
   | (Type.Type.TyTagUnion (cases), Type.Type.TyTag (tag_name, tag_typ))|
     (Type.Type.TyTag (tag_name, tag_typ), Type.Type.TyTagUnion (cases))->
-     (match List.assoc_opt tag_name cases with
-      | Some canonical_typ ->
-         (* canonical type is what we expect - it should unify with tag_type *)
-         unify gensym_state canonical_typ tag_typ
-      | None -> raise (TypeError ("Union Tag mismatch "
-                                  ^ Type.Type.to_string gensym_state (Type.Type.TyTagUnion (cases))
-                                  ^ "not matching "
-                                  ^ Type.Type.to_string gensym_state tag_typ)))
+    (match List.assoc_opt tag_name cases with
+     | Some canonical_typ ->
+       (* canonical type is what we expect - it should unify with tag_type *)
+       unify gensym_state canonical_typ tag_typ
+     | None -> raise (TypeError ("Union Tag mismatch "
+                                 ^ Type.Type.to_string gensym_state (Type.Type.TyTagUnion (cases))
+                                 ^ "not matching "
+                                 ^ Type.Type.to_string gensym_state tag_typ)))
   | (Type.Type.TyOp (_, _), (Type.Type.TyTag _|TyTagUnion _))|
-      ((TyTag _|TyTagUnion _), TyOp (_, _)) ->
-     raise (TypeError ("TyOp and TyTag|TyTagUnion don't unify"))
+    ((TyTag _|TyTagUnion _), TyOp (_, _)) ->
+    raise (TypeError ("TyOp and TyTag|TyTagUnion don't unify"))
   | (Type.Type.TyTag (t1_name, t1_typ), Type.Type.TyTag (t2_name, t2_typ)) ->
-     if t1_name = t2_name
-     then unify gensym_state t1_typ t2_typ
-     else raise (TypeError "Given two TyTag but they are not of the same tag name")
+    if t1_name = t2_name
+    then unify gensym_state t1_typ t2_typ
+    else raise (TypeError "Given two TyTag but they are not of the same tag name")
   | (TyTagUnion _, (TyTagUnion _)) ->
-     unify gensym_state a b
+    unify gensym_state a b
 
 and prune (t: Type.Type.t) =
   match t with
   | Type.Type.TyVar tv ->
-     (match tv.Type.TypeVariable.instance with
-      | Some stv ->
-         tv.Type.TypeVariable.instance <- Some (prune stv);
-         stv
-      | None -> t)
+    (match tv.Type.TypeVariable.instance with
+     | Some stv ->
+       tv.Type.TypeVariable.instance <- Some (prune stv);
+       stv
+     | None -> t)
   | _ -> t
 
 and is_generic (v: Type.TypeVariable.t) non_generic = not (occurs_in v non_generic)
@@ -248,7 +248,7 @@ and occurs_in (t: Type.TypeVariable.t) types = List.exists (fun t2 -> occurs_in_
 
 and is_integer_literal name =
   try ignore (int_of_string name);
-      true
+    true
   with Failure _ -> false
 
 let try_exp global_env env node =
@@ -262,7 +262,7 @@ let try_exp global_env env node =
                           TVSet.empty))
   with
   | ParseError e | TypeError e ->
-     print_endline e
+    print_endline e
 
 let analyze_result global_env env node =
   try Ok (analyse global_env node env TVSet.empty)
@@ -277,10 +277,10 @@ let type_infer_tests =
            global_env
            (Expr.Lam ((-1, -1),
                       [((Expr.PSym ((-1, -1), "x"))
-                      , (Expr.Lam
-                           ((-1, -1),
-                            [(Expr.PSym ((-1, -1), "y")
-                           , Expr.Sym ((-1, -1), "x"))])))]))
+                       , (Expr.Lam
+                            ((-1, -1),
+                             [(Expr.PSym ((-1, -1), "y")
+                              , Expr.Sym ((-1, -1), "x"))])))]))
            []
            TVSet.empty)) in
      Printf.sprintf
@@ -297,7 +297,7 @@ let type_infer_tests =
                [Type.Type.TyVar {Type.TypeVariable.id = 1; name = ""; instance = None};
                 Type.Type.TyVar {Type.TypeVariable.id = 0; name = ""; instance = None}])])))]
 
-    (* let () =
+(* let () =
  *   let var1 = Type.Type.TyVar (Type.TypeVariable.create ()) in
  *   let var2 = Type.Type.TyVar (Type.TypeVariable.create ()) in
  *   let pair_type = Type.Type.TyOp ("*", [var1; var2]) in
