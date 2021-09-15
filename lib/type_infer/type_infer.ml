@@ -111,32 +111,13 @@ let rec analyse gensym_state node (env: (string * Type.Type.t) list) non_generic
     new_type_param
   | (Tuple (_, _)|Set (_, _)) ->
     failwith "TODO `analyze` not yet implemented"
+
 and string_of_context env =
   let rec inner acc = function
     | (name, typ) :: rest ->
        inner ("(" ^ name ^ " " ^ (Type.Type.to_string env typ) ^ ")") rest
     | [] -> acc ^ ")"
   in inner "("
-
-and context_contains_constructor context name =
-  let rec search = function
-    | (_ctor_name, Type.Type.TyTagUnion ctors) :: rest ->
-       if List.mem_assoc name ctors
-       then true
-       else search rest
-    | (_, _) :: rest -> search rest
-    | [] -> false
-  in search context
-
-and find_enum_matching_ctor context name =
-  let rec search = function
-    | (_ctor_name, Type.Type.TyTagUnion ctors) :: rest ->
-       if List.mem_assoc name ctors
-       then List.assoc_opt name ctors
-       else search rest
-    | (_, _) :: rest -> search rest
-    | [] -> None
-  in search context
 
 and get_type global_env name context non_generic =
   if List.mem_assoc name context
@@ -145,16 +126,6 @@ and get_type global_env name context non_generic =
          (* (StringMap.find name context) *)
          (List.assoc name context)
          non_generic
-  else if is_integer_literal name
-  then Type.tU8
-  else if context_contains_constructor context name
-  then match (find_enum_matching_ctor context name) with
-       | Some enum_type ->
-          enum_type
-       | None -> raise (ParseError
-                          (Printf.sprintf
-                             "TypeError: Can't find enum for tag %s"
-                             name))
   else raise (ParseError ("Undefined symbol in type inferrer: " ^ name))
 
 and fresh global_env t non_generic: Type.Type.t =
