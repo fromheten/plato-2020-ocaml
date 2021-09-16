@@ -9,7 +9,9 @@ let rec pow a = function
   | n -> let b = pow a (n / 2) in
          b * b * (if n mod 2 = 0 then 1 else a)
 
+(* todo rename to tVar and place accordingly *)
 let ty_var global_env = Type.Type.TyVar (Type.TypeVariable.create global_env)
+
 let rec zip xl yl =
   match (xl, yl) with
   | (x::xs, y::ys) -> (x, y) :: zip xs ys
@@ -61,7 +63,8 @@ let rec analyse gensym_state node (env: (string * Type.Type.t) list) non_generic
      let defn_type = analyse gensym_state defn new_env new_non_generic in
      unify gensym_state new_type_param defn_type;
      analyse gensym_state body new_env non_generic
-  | Expr.Unit _pos -> assert false
+  | Expr.Unit _pos ->
+    Type.tUnit
   | Expr.U8 (_n, _pos) ->
     Type.tU8
   | Expr.Ann (_pos, expected_typ, given_expr) ->
@@ -116,6 +119,26 @@ let rec analyse gensym_state node (env: (string * Type.Type.t) list) non_generic
     new_type_param
   | (Tuple (_, _)|Set (_, _)) ->
     failwith "TODO `analyze` not yet implemented"
+  | TaggedValue (tag, TyEnum (enum_name, cases), value) ->
+    (match (List.assoc_opt tag cases) with
+     (* todo rename env to ctx
+        todo rename node to expr *)
+     | Some t when analyse gensym_state value env non_generic = t ->
+       TyEnum (enum_name, cases)
+     | Some _t -> failwith (Printf.sprintf "Tag %s given wrong type for enum %s" tag enum_name)
+     | None -> failwith (Printf.sprintf "Tag %s not found in Enum %s" tag enum_name))
+  | TaggedValue (_name, (TyVar tvar), _value) ->
+    analyse
+      gensym_state
+      (TaggedValue (_name, (List.assoc tvar.name env), _value))
+      env
+      non_generic
+  | TaggedValue (name, _enum, _value) ->
+    failwith (Printf.sprintf
+                "TypeError: Given TaggedValue where enum is neither TyEnum nor TyVar. name = %s"
+                name)
+  | Enum t ->
+    t
 
 and string_of_context env =
   let rec inner acc = function
@@ -155,7 +178,9 @@ and fresh global_env t non_generic: Type.Type.t =
                           (fun (name, x) -> (name, freshrec x))
                           child_types)
     | Type.Type.TyOp (name, child_types) ->
-       Type.Type.TyOp (name, (List.map (fun x -> freshrec x) child_types))
+      Type.Type.TyOp (name, (List.map (fun x -> freshrec x) child_types))
+    | Type.Type.TyEnum (_name, cases) ->
+      fresh global_env (Type.Type.TyTagUnion cases) non_generic
   in freshrec t
 
 (* Har igång type inferrence som kan göra letrec nu, Hindley Milner.
@@ -229,6 +254,29 @@ TyEnum ("Maybe", ty_var "a", [Ty])
     else raise (TypeError "Given two TyTag but they are not of the same tag name")
   | (TyTagUnion _, (TyTagUnion _)) ->
     unify gensym_state a b
+  | (TyEnum (_name, cases), (TyTag (tag_name, tag_typ)))
+  | ((TyTag (tag_name, tag_typ)), TyEnum (_name, cases)) ->
+    unify
+      gensym_state
+      (TyTagUnion (cases))
+      (TyTag (tag_name, tag_typ))
+  | (TyEnum (_name, left_hand_side_cases), TyTagUnion right_hand_side_cases)
+  | (TyTagUnion right_hand_side_cases, TyEnum (_name, left_hand_side_cases)) ->
+    unify
+      gensym_state
+      (TyTagUnion left_hand_side_cases)
+      (TyTagUnion right_hand_side_cases)
+  | (TyEnum (_name, cases), TyOp (_ty_op0, _ty_op1))
+  | (TyOp (_ty_op0, _ty_op1), TyEnum (_name, cases)) ->
+    unify
+      gensym_state
+      (TyTagUnion cases)
+      (TyOp (_ty_op0, _ty_op1))
+  | (TyEnum (_lhs_name, lhs_cases), (TyEnum (_rhs_name, rhs_cases))) ->
+    unify
+      gensym_state
+      (TyTagUnion lhs_cases)
+      (TyTagUnion rhs_cases)
 
 and prune (t: Type.Type.t) =
   match t with
@@ -269,7 +317,7 @@ let try_exp global_env env node =
   | ParseError e | TypeError e ->
     print_endline e
 
-let analyze_result global_env env node =
+let analyse_result global_env env node =
   try Ok (analyse global_env node env TVSet.empty)
   with
   | ParseError e -> Error (ParseError e)
@@ -300,7 +348,54 @@ let type_infer_tests =
             Type.Type.TyOp
               ("->",
                [Type.Type.TyVar {Type.TypeVariable.id = 1; name = ""; instance = None};
-                Type.Type.TyVar {Type.TypeVariable.id = 0; name = ""; instance = None}])])))]
+                Type.Type.TyVar {Type.TypeVariable.id = 0; name = ""; instance = None}])])))
+  ; ("Tagged Unions"
+    , let global_env = Type.new_gensym_state () in
+      let with_stdlib expr = Expr.Let ((-1, -1),
+                                       "Bool",
+                                       (Enum (TyEnum ("Bool", [("True", Type.tUnit)
+                                                              ;("False", Type.tUnit)]))),
+                                       (Expr.Let ((-1, -1),
+                                                  "Option",
+                                                  (Enum (TyEnum ("Option", ["Some", Type.tU8
+                                                                           ;"None", Type.tUnit]))),
+                                                  expr))) in
+      let tvar name  =
+        Type.Type.TyVar {Type.TypeVariable.id = 0; name = name; instance = None} in
+      (analyse_result
+         global_env
+         []
+         (with_stdlib
+            (TaggedValue ("True",
+                          tvar "Bool",
+                          Expr.Unit (-1,-1)
+                          (* Expr.U8 ((-1, -1), 1) *)))) (* => Errors, expected Unit got Int *)
+      )
+      = Ok (TyEnum ("Bool", [("True", Type.tUnit)
+                            ;("False", Type.tUnit)]))
+      (* Error (TypeError "expected Unit got U8") *))
+  ; ("Tagged Unions with success"
+     ,
+     let global_env = Type.new_gensym_state () in
+     let with_stdlib expr = Expr.Let ((-1, -1),
+                                       "Bool",
+                                       (Enum (TyEnum ("Bool", [("True", Type.tUnit)
+                                                              ;("False", Type.tUnit)]))),
+                                       (Expr.Let ((-1, -1),
+                                                  "Option",
+                                                  (Enum (TyEnum ("Option", ["Some", Type.tU8
+                                                                           ;"None", Type.tUnit]))),
+                                                  expr))) in
+     let tvar name  =
+        Type.Type.TyVar {Type.TypeVariable.id = 0; name = name; instance = None} in
+     let expr = (with_stdlib (TaggedValue ("Some", tvar "Option", Expr.U8 ((-1, -1), 137)))) in
+     (analyse_result
+        global_env
+        []
+        expr
+     )
+     = Ok (TyEnum ("Option", ["Some", Type.tU8
+                             ;"None", Type.tUnit])))]
 
 (* let () =
  *   let var1 = Type.Type.TyVar (Type.TypeVariable.create ()) in

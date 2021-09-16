@@ -212,7 +212,11 @@ Until I create match, I don't really have to allocate these
       generate expression state
    | Match (_, x, cases) ->
       let generate_match = generate_match generate state in
-      generate_match x cases)
+      generate_match x cases
+   | TaggedValue (_name, _enum, _value) ->
+     failwith "Generate C code for TaggedValue"
+   | Enum _t ->
+     failwith "Generate C code for Enum")
 
 let generate_program expression =
   let state = ref { lam_number = 0

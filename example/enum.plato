@@ -1,0 +1,2 @@
+(let Bool (enum True False)
+ True)

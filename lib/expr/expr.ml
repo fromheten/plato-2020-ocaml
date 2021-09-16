@@ -20,6 +20,8 @@ type expr =
   | Match of position * expr * (expr pattern * expr) list
   | Let of position * string * expr * expr
   | Letrec of position * string * expr * expr
+  | TaggedValue of string * Type.Type.t * expr (* tag, enum, tagged value *)
+  | Enum of Type.Type.t                        (* invariant: must be TEnum *)
 
 let is_symbol_char c =
   not (List.exists
@@ -115,3 +117,6 @@ let rec string_of_expr (gensym_env): expr -> string =
                                Printf.sprintf "%s %s" (string_of_expr gensym_env key)
                                                       (string_of_expr gensym_env value))
                              keys_and_vals))
+  | TaggedValue (name, _enum, value) ->
+    Printf.sprintf "(%s %s)" name (string_of_expr gensym_env value)
+  | Enum t -> Type.Type.to_string gensym_env t

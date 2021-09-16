@@ -19,7 +19,7 @@ let compile (src: string): (string, string) result =
        ;("string", Type.tArrow (Type_infer.ty_var env) Type.tString)
         (* ("Bool", Type_infer.my_Bool) *)] in
      (match
-        (match (Type_infer.analyze_result
+        (match (Type_infer.analyse_result
                   env
                   stdlib
                   expr) with
