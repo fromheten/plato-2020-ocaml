@@ -20,19 +20,67 @@ let rec zip xl yl =
 
 module TVSet = Set.Make(Type.TypeVariable)
 
-exception ParseError of string
+exception SymbolNotFoundError of string
 exception TypeError of string
 exception UnificationError of string
 type analyze_error
-  = ParseError of string
+  = SymbolNotFoundError of string
   | TypeError of string
   | UnificationError of string
 
+let print_num n =
+  print_int n;
+  print_newline ()
+
+(* TODO change these argument names *)
 let rec analyse gensym_state node (env: (string * Type.Type.t) list) non_generic: Type.Type.t =
+  Printf.printf "In analyse: %s\n" (Expr.string_of_expr gensym_state node);
   match node with
   | Expr.Sym (_pos, name) -> get_type gensym_state name env non_generic
+  (* TODO remove Type.TyEnum altogether *)
+  (* ((union (True <>) (False <>) True) *)
+  | App (pos,
+         Sym (_, enum_symbol),
+         Sym (_, tag_name)) when
+      (match List.assoc_opt enum_symbol env with
+       | Some (TyEnum (_, _cases))
+       | Some (TyTagUnion (_cases)) -> true
+       | _ -> false) ->
+    Printf.printf "In the special case!\n";
+    (match List.assoc enum_symbol env with
+     |  (TyEnum (_, cases))
+     |  (TyTagUnion (cases)) ->
+       (analyse
+          gensym_state
+          (App (pos,
+                Enum (TyTagUnion (cases)),
+                Sym (pos, tag_name)))
+          env
+          non_generic)
+     | _ -> failwith "zzzzzZZZzZ")
+  | App (_,
+         Enum (Type.Type.TyEnum (_, cases)
+              |Type.Type.TyTagUnion (cases)),
+         Sym (_, tag_name)) ->
+    print_num 1;
+    (match List.assoc_opt tag_name cases with
+     | Some tag_type ->
+       let return_value = (Type.tArrow
+                             (tag_type)
+                             (Type.Type.TyTagUnion (cases))) in
+       Printf.printf "Enum is an Arrow! %s\n"
+         (Type.Type.to_string
+            gensym_state
+            return_value);
+       return_value
+     | None ->
+       failwith (Printf.sprintf
+                   "TypeError!! tag %s not part of enum %s"
+                   tag_name
+                   (Type.Type.to_string gensym_state (Type.Type.TyTagUnion (cases)))))
+
   | Expr.App (_pos, fn, arg) ->
-     let fun_type = analyse gensym_state fn env non_generic in
+    let fun_type = analyse gensym_state fn env non_generic in
      let arg_type = analyse gensym_state arg env non_generic in
      let result_type_param = Type.Type.TyVar (Type.TypeVariable.create gensym_state) in
      unify gensym_state (Type.tArrow arg_type result_type_param) fun_type;
@@ -154,7 +202,7 @@ and get_type global_env name context non_generic =
          (* (StringMap.find name context) *)
          (List.assoc name context)
          non_generic
-  else raise (ParseError ("Undefined symbol in type inferrer: " ^ name))
+  else raise (SymbolNotFoundError ("Undefined symbol in type inferrer: " ^ name))
 
 and fresh global_env t non_generic: Type.Type.t =
   let mappings = Hashtbl.create 30 in
@@ -247,7 +295,10 @@ TyEnum ("Maybe", ty_var "a", [Ty])
                                  ^ Type.Type.to_string gensym_state tag_typ)))
   | (Type.Type.TyOp (_, _), (Type.Type.TyTag _|TyTagUnion _))|
     ((TyTag _|TyTagUnion _), TyOp (_, _)) ->
-    raise (TypeError ("TyOp and TyTag|TyTagUnion don't unify"))
+    raise (TypeError (Printf.sprintf
+                        "TyOp and TyTag|TyTagUnion don't unify. \na: %s\nb: %s"
+                        (Type.Type.to_string gensym_state a)
+                        (Type.Type.to_string gensym_state b)))
   | (Type.Type.TyTag (t1_name, t1_typ), Type.Type.TyTag (t2_name, t2_typ)) ->
     if t1_name = t2_name
     then unify gensym_state t1_typ t2_typ
@@ -314,13 +365,13 @@ let try_exp global_env env node =
                           env
                           TVSet.empty))
   with
-  | ParseError e | TypeError e ->
+  | SymbolNotFoundError e | TypeError e ->
     print_endline e
 
 let analyse_result global_env env node =
   try Ok (analyse global_env node env TVSet.empty)
   with
-  | ParseError e -> Error (ParseError e)
+  | SymbolNotFoundError e -> Error (SymbolNotFoundError e)
   | TypeError e -> Error (TypeError e)
 
 let type_infer_tests =

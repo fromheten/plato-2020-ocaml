@@ -214,6 +214,8 @@ Until I create match, I don't really have to allocate these
       let generate_match = generate_match generate state in
       generate_match x cases
    | TaggedValue (_name, _enum, _value) ->
+     (* TaggedValue and Enum can really be just runtime values you pass around *)
+     (* Doesn't have to be compiled statically in any way - just make a type of value *)
      failwith "Generate C code for TaggedValue"
    | Enum _t ->
      failwith "Generate C code for Enum")

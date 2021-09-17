@@ -7,36 +7,39 @@ let compile (src: string): (string, string) result =
           (0
           ,(Util.char_list src)) with
   | Ok (_rest, expr) ->
-     let new_env () = (Type.new_gensym_state ()) in
-     let env = (new_env ()) in
-     let stdlib =
-       [("Bool", Type.Type.TyTagUnion (["True", Type.tUnit
-                                             ;"False", Type.tUnit]))
-       ;("Command", Type.Type.TyTagUnion (["Log",
-                                           Type.tArrow
-                                             Type.tString
-                                             Type.tUnit]))
-       ;("string", Type.tArrow (Type_infer.ty_var env) Type.tString)
+    let new_env () = (Type.new_gensym_state ()) in
+    let env = (new_env ()) in
+    let stdlib =
+      [("Bool", Type.Type.TyTagUnion (["True", Type.tUnit
+                                      ;"False", Type.tUnit]))
+      ;("Command", Type.Type.TyTagUnion (["Log",
+                                          Type.tArrow
+                                            Type.tString
+                                            Type.tUnit]))
+      ;("string", Type.tArrow (Type_infer.ty_var env) Type.tString)
         (* ("Bool", Type_infer.my_Bool) *)] in
-     (match
-        (match (Type_infer.analyse_result
-                  env
-                  stdlib
-                  expr) with
-         | Ok typ -> Printf.printf "\nType: %s\n" (Type.Type.to_string (Type.new_gensym_state ()) typ);
-                     Ok (Type.Type.to_string (new_env ()) typ)
-         | Error e -> Error e) with
-      | Ok _typ -> Ok (Codegen.generate_program expr)
-      | Error e -> Error (match e with
-                          | Type_infer.ParseError msg  ->
-                             "ParseError: " ^  msg
-                          | Type_infer.TypeError msg ->
-                             "TypeError: " ^  msg
-                          | Type_infer.UnificationError msg ->
-                             "UnificationError: " ^  msg))
+    (match
+       (match (Type_infer.analyse_result
+                 env
+                 stdlib
+                 expr) with
+       | Ok typ -> Printf.printf "\nType: %s\n" (Type.Type.to_string (Type.new_gensym_state ()) typ);
+         Ok (Type.Type.to_string (new_env ()) typ)
+       | Error e -> Error e) with
+    | Ok _typ -> Ok (Codegen.generate_program expr)
+    | Error e -> Error (
+        (match e with
+         | Type_infer.SymbolNotFoundError msg  ->
+           "SymbolNotFoundError: " ^  msg
+         | Type_infer.TypeError msg ->
+           "TypeError: " ^  msg
+         | Type_infer.UnificationError msg ->
+           "UnificationError: " ^  msg)
+        ^ Printf.sprintf "\nParsed expression: %s\n" (Expr.string_of_expr gensym_env expr));
+    )
   | Error e ->
-     Error (Util.str ["`Platoc.compile` Error: e: "
-                     ;e])
+    Error (Util.str ["`Platoc.compile` Error: e: "
+                    ;e])
 
 let test test_msg_pairs =
   test_msg_pairs

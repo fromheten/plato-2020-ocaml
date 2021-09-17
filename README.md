@@ -32,7 +32,6 @@ Install the Plato platform by running `export PREFIX=/my/install/path && make in
 ## TODO
 
 * Structs/Records
-* Unions/Enums
 * CPS Conversion and Tail Call Elimination
 * Compile-time dependencies referred to by hash
 * Command based effects system
@@ -43,6 +42,7 @@ Install the Plato platform by running `export PREFIX=/my/install/path && make in
 ## Partially done
 * DICT with HAMT Immutable HashArrayMapTrie
 Missing get, iterator, toString
+* Unions/Enums
 
 ## DONE
 
