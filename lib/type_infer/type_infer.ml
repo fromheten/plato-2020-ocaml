@@ -25,10 +25,6 @@ type typeof_error
   | TypeError of string
   | UnificationError of string
 
-let print_num n =
-  print_int n;
-  print_newline ()
-
 let rec typeof_exn gensym_state expr (context: (string * Type.Type.t) list) non_generic: Type.Type.t =
   Printf.printf "In typeof: %s\n" (Expr.string_of_expr gensym_state expr);
   match expr with
@@ -53,7 +49,6 @@ let rec typeof_exn gensym_state expr (context: (string * Type.Type.t) list) non_
   | App (_,
          Enum (Type.Type.TyTagUnion (cases)),
          Sym (_, tag_name)) ->
-    print_num 1;
     (match List.assoc_opt tag_name cases with
      | Some tag_type ->
        let return_value = (Type.tArrow
