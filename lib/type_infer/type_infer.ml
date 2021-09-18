@@ -20,7 +20,7 @@ module TVSet = Set.Make(Type.TypeVariable)
 exception SymbolNotFoundError of string
 exception TypeError of string
 exception UnificationError of string
-type analyze_error
+type typeof_error
   = SymbolNotFoundError of string
   | TypeError of string
   | UnificationError of string
@@ -29,8 +29,8 @@ let print_num n =
   print_int n;
   print_newline ()
 
-let rec analyse gensym_state expr (context: (string * Type.Type.t) list) non_generic: Type.Type.t =
-  Printf.printf "In analyse: %s\n" (Expr.string_of_expr gensym_state expr);
+let rec typeof_exn gensym_state expr (context: (string * Type.Type.t) list) non_generic: Type.Type.t =
+  Printf.printf "In typeof: %s\n" (Expr.string_of_expr gensym_state expr);
   match expr with
   | Expr.Sym (_pos, name) -> get_type gensym_state name context non_generic
   | App (pos,
@@ -42,7 +42,7 @@ let rec analyse gensym_state expr (context: (string * Type.Type.t) list) non_gen
     Printf.printf "In the special case!\n";
     (match List.assoc enum_symbol context with
      | (TyTagUnion (cases)) ->
-       (analyse
+       (typeof_exn
           gensym_state
           (App (pos,
                 Enum (TyTagUnion (cases)),
@@ -71,8 +71,8 @@ let rec analyse gensym_state expr (context: (string * Type.Type.t) list) non_gen
                    (Type.Type.to_string gensym_state (Type.Type.TyTagUnion (cases)))))
 
   | Expr.App (_pos, fn, arg) ->
-    let fun_type = analyse gensym_state fn context non_generic in
-    let arg_type = analyse gensym_state arg context non_generic in
+    let fun_type = typeof_exn gensym_state fn context non_generic in
+    let arg_type = typeof_exn gensym_state arg context non_generic in
     let result_type_param = Type.Type.TyVar (Type.TypeVariable.create gensym_state) in
     unify gensym_state (Type.tArrow arg_type result_type_param) fun_type;
     result_type_param
@@ -83,7 +83,7 @@ let rec analyse gensym_state expr (context: (string * Type.Type.t) list) non_gen
     let arg_type_param = Type.Type.TyVar arg_type in
     let new_context = (v, arg_type_param) :: context in
     let new_non_generic = TVSet.add arg_type non_generic in
-    let result_type = analyse gensym_state body new_context new_non_generic in
+    let result_type = typeof_exn gensym_state body new_context new_non_generic in
     Type.tArrow arg_type_param result_type
   | Expr.Lam (_, (PTag (_, _, _), _)::_) ->
     failwith "TODO can't yet type check functions of patterns"
@@ -94,23 +94,23 @@ let rec analyse gensym_state expr (context: (string * Type.Type.t) list) non_gen
      The reason to prefer the latter as canonical is to be obvious about when
      things are defined - what if the enum is the result of a function call?  *)
   | Expr.Let (_pos, name, defn, body) ->
-     let defn_type = analyse gensym_state defn context non_generic in
+     let defn_type = typeof_exn gensym_state defn context non_generic in
      let new_context = (name, defn_type) :: context in
-     analyse gensym_state body new_context non_generic
+     typeof_exn gensym_state body new_context non_generic
   | Expr.Letrec (_pos, name, defn, body) ->
      let new_type = Type.TypeVariable.create gensym_state in
      let new_type_param = Type.Type.TyVar new_type in
      let new_context = (name, new_type_param) :: context in
      let new_non_generic = TVSet.add new_type non_generic in
-     let defn_type = analyse gensym_state defn new_context new_non_generic in
+     let defn_type = typeof_exn gensym_state defn new_context new_non_generic in
      unify gensym_state new_type_param defn_type;
-     analyse gensym_state body new_context non_generic
+     typeof_exn gensym_state body new_context non_generic
   | Expr.Unit _pos ->
     Type.tUnit
   | Expr.U8 (_n, _pos) ->
     Type.tU8
   | Expr.Ann (_pos, expected_typ, given_expr) ->
-    let given_expr_type = analyse gensym_state given_expr context non_generic in
+    let given_expr_type = typeof_exn gensym_state given_expr context non_generic in
     unify gensym_state expected_typ given_expr_type;
     given_expr_type
   | Expr.String (_pos, _s) -> Type.tString
@@ -118,7 +118,7 @@ let rec analyse gensym_state expr (context: (string * Type.Type.t) list) non_gen
   | Expr.Vector (_pos, xs) ->
     let new_type = Type.TypeVariable.create gensym_state in
     let new_type_param = Type.Type.TyVar new_type in
-    let xs_types = (List.map (fun expr -> analyse gensym_state expr context non_generic) xs) in
+    let xs_types = (List.map (fun expr -> typeof_exn gensym_state expr context non_generic) xs) in
     List.iter (fun ty ->
         unify gensym_state new_type_param ty;)
       (xs_types);
@@ -129,7 +129,7 @@ let rec analyse gensym_state expr (context: (string * Type.Type.t) list) non_gen
     let unify_many (xs: Expr.expr list): Type.Type.t =
       let new_type = Type.TypeVariable.create gensym_state in
       let new_type_param = Type.Type.TyVar new_type in
-      let xs_types = (List.map (fun expr -> analyse gensym_state expr context non_generic) xs) in
+      let xs_types = (List.map (fun expr -> typeof_exn gensym_state expr context non_generic) xs) in
       List.iter (fun ty ->
         unify gensym_state new_type_param ty;)
         (xs_types);
@@ -153,22 +153,22 @@ let rec analyse gensym_state expr (context: (string * Type.Type.t) list) non_gen
                               |> List.map (appize x)
                               |> List.map
                                    (fun expr ->
-                                     analyse gensym_state expr context non_generic) in
+                                     typeof_exn gensym_state expr context non_generic) in
     List.iter
       (fun ty ->
         unify gensym_state new_type_param ty;)
       cases_appized_types;
     new_type_param
   | (Tuple (_, _)|Set (_, _)) ->
-    failwith "TODO `analyze` not yet implemented"
+    failwith "TODO `typeof_exn` of Tuple not yet implemented"
   | TaggedValue (tag, TyTagUnion cases, value) ->
     (match (List.assoc_opt tag cases) with
-     | Some t when analyse gensym_state value context non_generic = t ->
+     | Some t when typeof_exn gensym_state value context non_generic = t ->
        TyTagUnion (cases)
      | Some _t -> failwith (Printf.sprintf "Tag %s given wrong type for Enum" tag)
      | None -> failwith (Printf.sprintf "Tag %s not found in Enum" tag))
   | TaggedValue (_name, (TyVar tvar), _value) ->
-    analyse
+    typeof_exn
       gensym_state
       (TaggedValue (_name, (List.assoc tvar.name context), _value))
       context
@@ -325,7 +325,7 @@ let try_exp gensym_state context expr =
   Printf.printf "%s: " (Expr.string_of_expr gensym_state expr);
   try print_endline (Type.Type.to_string
                        gensym_state
-                       (analyse
+                       (typeof_exn
                           gensym_state
                           expr
                           context
@@ -334,8 +334,8 @@ let try_exp gensym_state context expr =
   | SymbolNotFoundError e | TypeError e ->
     print_endline e
 
-let analyse_result gensym_state context expr =
-  try Ok (analyse gensym_state expr context TVSet.empty)
+let typeof gensym_state context expr =
+  try Ok (typeof_exn gensym_state expr context TVSet.empty)
   with
   | SymbolNotFoundError e -> Error (SymbolNotFoundError e)
   | TypeError e -> Error (TypeError e)
@@ -343,7 +343,7 @@ let analyse_result gensym_state context expr =
 let type_infer_tests =
   [( let actually =
        (let gensym_state = Type.new_gensym_state () in
-        (analyse
+        (typeof_exn
            gensym_state
            (Expr.Lam ((-1, -1),
                       [((Expr.PSym ((-1, -1), "x"))
@@ -379,7 +379,7 @@ let type_infer_tests =
                                                   expr))) in
       let tvar name  =
         Type.Type.TyVar {Type.TypeVariable.id = 0; name = name; instance = None} in
-      (analyse_result
+      (typeof
          gensym_state
          []
          (with_stdlib
@@ -406,11 +406,10 @@ let type_infer_tests =
      let tvar name  =
         Type.Type.TyVar {Type.TypeVariable.id = 0; name = name; instance = None} in
      let expr = (with_stdlib (TaggedValue ("Some", tvar "Option", Expr.U8 ((-1, -1), 137)))) in
-     (analyse_result
+     (typeof
         gensym_state
         []
-        expr
-     )
+        expr)
      = Ok (TyTagUnion (["Some", Type.tU8
                        ;"None", Type.tUnit])))]
 
