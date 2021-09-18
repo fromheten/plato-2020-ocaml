@@ -738,7 +738,7 @@ let enum_case source =
           | _ -> failwith "enum_case can currently only be simply symbols. Come back later...")))
     source
 
-let enum _expression source =
+let enum source =
   (map
      (andThen
         (andThen
@@ -789,7 +789,7 @@ let rec expression gensym_env (source_code: source): Expr.expr parseresult =
      ; deep_lambda expression
      ; annotation gensym_env expression
      ; let_expr expression
-     ; enum expression
+     ; enum
      (* ; tagged_expr expression This does not belong here, because the syntax is equal to the syntax of App.
         Since it's syntactically similar but only semantically different (depending on the type of e0), the distinction between App and TaggedValue is semantic, not syntactic *)
      ; match_expr expression

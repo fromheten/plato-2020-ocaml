@@ -217,8 +217,15 @@ Until I create match, I don't really have to allocate these
      (* TaggedValue and Enum can really be just runtime values you pass around *)
      (* Doesn't have to be compiled statically in any way - just make a type of value *)
      failwith "Generate C code for TaggedValue"
-   | Enum _t ->
+   | Enum (TyTagUnion cases) ->
+     failwith (Printf.sprintf
+                 "Generate C code for Enum: %s"
+                 (Type.Type.to_string
+                    (Type.new_gensym_state ())
+                    (TyTagUnion cases)))
+   | Enum _ ->
      failwith "Generate C code for Enum")
+
 
 let generate_program expression =
   let state = ref { lam_number = 0
