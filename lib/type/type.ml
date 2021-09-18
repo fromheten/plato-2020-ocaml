@@ -48,14 +48,12 @@ and Type : sig
          | TyTag of (string * t)
          | TyTagUnion of (string * t) list
          | TyOp of string * Type.t list (* name, types. Think unification algorithm! *)
-         | TyEnum of string * (string * t) list
   val to_string: gensym_state -> t -> string
 end = struct
   type t = TyVar of TypeVariable.t
          | TyTag of (string * t)
          | TyTagUnion of (string * t) list
          | TyOp of string * Type.t list (* name, types. Think unification algorithm! *)
-         | TyEnum of string * (string * t) list
   let rec to_string gensym_state = function
     | TyVar tv -> TypeVariable.to_string gensym_state tv ^ "-" ^ string_of_int tv.id ^ tv.name
     | TyTag (tag, tagged_typ) ->
@@ -76,8 +74,6 @@ end = struct
               |> List.map (Type.to_string gensym_state)
               |> List.fold_left (fun a b -> a ^ " " ^ b) ""
               |> Printf.sprintf "%s %s" name)
-    | TyEnum (name, _cases) ->
-      Printf.sprintf "(enum %s)" name
 end
 
 let tArrow from_type to_type = Type.TyOp ("->", [from_type; to_type])

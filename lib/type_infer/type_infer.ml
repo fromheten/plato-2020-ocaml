@@ -33,19 +33,15 @@ let rec analyse gensym_state expr (context: (string * Type.Type.t) list) non_gen
   Printf.printf "In analyse: %s\n" (Expr.string_of_expr gensym_state expr);
   match expr with
   | Expr.Sym (_pos, name) -> get_type gensym_state name context non_generic
-  (* TODO remove Type.TyEnum altogether *)
-  (* ((union (True <>) (False <>) True) *)
   | App (pos,
          Sym (_, enum_symbol),
          Sym (_, tag_name)) when
       (match List.assoc_opt enum_symbol context with
-       | Some (TyEnum (_, _cases))
        | Some (TyTagUnion (_cases)) -> true
        | _ -> false) ->
     Printf.printf "In the special case!\n";
     (match List.assoc enum_symbol context with
-     |  (TyEnum (_, cases))
-     |  (TyTagUnion (cases)) ->
+     | (TyTagUnion (cases)) ->
        (analyse
           gensym_state
           (App (pos,
@@ -55,8 +51,7 @@ let rec analyse gensym_state expr (context: (string * Type.Type.t) list) non_gen
           non_generic)
      | _ -> failwith "zzzzzZZZzZ")
   | App (_,
-         Enum (Type.Type.TyEnum (_, cases)
-              |Type.Type.TyTagUnion (cases)),
+         Enum (Type.Type.TyTagUnion (cases)),
          Sym (_, tag_name)) ->
     print_num 1;
     (match List.assoc_opt tag_name cases with
@@ -95,7 +90,7 @@ let rec analyse gensym_state expr (context: (string * Type.Type.t) list) non_gen
 
   (* In the future, a macro may convert the body of the following expression
      from: `(let Bool (enum True False) True)`
-     into: `(let Bool (enum True False) (Bool True))`.
+     into: `(let Bool (enum True False) (Bool True <>))`.
      The reason to prefer the latter as canonical is to be obvious about when
      things are defined - what if the enum is the result of a function call?  *)
   | Expr.Let (_pos, name, defn, body) ->
@@ -166,14 +161,12 @@ let rec analyse gensym_state expr (context: (string * Type.Type.t) list) non_gen
     new_type_param
   | (Tuple (_, _)|Set (_, _)) ->
     failwith "TODO `analyze` not yet implemented"
-  | TaggedValue (tag, TyEnum (enum_name, cases), value) ->
+  | TaggedValue (tag, TyTagUnion cases, value) ->
     (match (List.assoc_opt tag cases) with
-     (* todo rename context to ctx
-        todo rename expr to expr *)
      | Some t when analyse gensym_state value context non_generic = t ->
-       TyEnum (enum_name, cases)
-     | Some _t -> failwith (Printf.sprintf "Tag %s given wrong type for enum %s" tag enum_name)
-     | None -> failwith (Printf.sprintf "Tag %s not found in Enum %s" tag enum_name))
+       TyTagUnion (cases)
+     | Some _t -> failwith (Printf.sprintf "Tag %s given wrong type for Enum" tag)
+     | None -> failwith (Printf.sprintf "Tag %s not found in Enum" tag))
   | TaggedValue (_name, (TyVar tvar), _value) ->
     analyse
       gensym_state
@@ -225,8 +218,6 @@ and fresh gensym_state t non_generic: Type.Type.t =
                           child_types)
     | Type.Type.TyOp (name, child_types) ->
       Type.Type.TyOp (name, (List.map (fun x -> freshrec x) child_types))
-    | Type.Type.TyEnum (_name, cases) ->
-      fresh gensym_state (Type.Type.TyTagUnion cases) non_generic
   in freshrec t
 
 (* Har igång type inferrence som kan göra letrec nu, Hindley Milner.
@@ -303,29 +294,6 @@ TyEnum ("Maybe", ty_var "a", [Ty])
     else raise (TypeError "Given two TyTag but they are not of the same tag name")
   | (TyTagUnion _, (TyTagUnion _)) ->
     unify gensym_state a b
-  | (TyEnum (_name, cases), (TyTag (tag_name, tag_typ)))
-  | ((TyTag (tag_name, tag_typ)), TyEnum (_name, cases)) ->
-    unify
-      gensym_state
-      (TyTagUnion (cases))
-      (TyTag (tag_name, tag_typ))
-  | (TyEnum (_name, left_hand_side_cases), TyTagUnion right_hand_side_cases)
-  | (TyTagUnion right_hand_side_cases, TyEnum (_name, left_hand_side_cases)) ->
-    unify
-      gensym_state
-      (TyTagUnion left_hand_side_cases)
-      (TyTagUnion right_hand_side_cases)
-  | (TyEnum (_name, cases), TyOp (_ty_op0, _ty_op1))
-  | (TyOp (_ty_op0, _ty_op1), TyEnum (_name, cases)) ->
-    unify
-      gensym_state
-      (TyTagUnion cases)
-      (TyOp (_ty_op0, _ty_op1))
-  | (TyEnum (_lhs_name, lhs_cases), (TyEnum (_rhs_name, rhs_cases))) ->
-    unify
-      gensym_state
-      (TyTagUnion lhs_cases)
-      (TyTagUnion rhs_cases)
 
 and prune (t: Type.Type.t) =
   match t with
@@ -402,12 +370,12 @@ let type_infer_tests =
     , let gensym_state = Type.new_gensym_state () in
       let with_stdlib expr = Expr.Let ((-1, -1),
                                        "Bool",
-                                       (Enum (TyEnum ("Bool", [("True", Type.tUnit)
-                                                              ;("False", Type.tUnit)]))),
+                                       (Enum (TyTagUnion ([("True", Type.tUnit)
+                                                          ;("False", Type.tUnit)]))),
                                        (Expr.Let ((-1, -1),
                                                   "Option",
-                                                  (Enum (TyEnum ("Option", ["Some", Type.tU8
-                                                                           ;"None", Type.tUnit]))),
+                                                  (Enum (TyTagUnion (["Some", Type.tU8
+                                                                     ;"None", Type.tUnit]))),
                                                   expr))) in
       let tvar name  =
         Type.Type.TyVar {Type.TypeVariable.id = 0; name = name; instance = None} in
@@ -420,20 +388,20 @@ let type_infer_tests =
                           Expr.Unit (-1,-1)
                           (* Expr.U8 ((-1, -1), 1) *)))) (* => Errors, expected Unit got Int *)
       )
-      = Ok (TyEnum ("Bool", [("True", Type.tUnit)
-                            ;("False", Type.tUnit)]))
+      = Ok (TyTagUnion ([("True", Type.tUnit)
+                        ;("False", Type.tUnit)]))
       (* Error (TypeError "expected Unit got U8") *))
   ; ("Tagged Unions with success"
      ,
      let gensym_state = Type.new_gensym_state () in
      let with_stdlib expr = Expr.Let ((-1, -1),
                                        "Bool",
-                                       (Enum (TyEnum ("Bool", [("True", Type.tUnit)
-                                                              ;("False", Type.tUnit)]))),
+                                       (Enum (TyTagUnion ([("True", Type.tUnit)
+                                                          ;("False", Type.tUnit)]))),
                                        (Expr.Let ((-1, -1),
                                                   "Option",
-                                                  (Enum (TyEnum ("Option", ["Some", Type.tU8
-                                                                           ;"None", Type.tUnit]))),
+                                                  (Enum (TyTagUnion (["Some", Type.tU8
+                                                                     ;"None", Type.tUnit]))),
                                                   expr))) in
      let tvar name  =
         Type.Type.TyVar {Type.TypeVariable.id = 0; name = name; instance = None} in
@@ -443,8 +411,8 @@ let type_infer_tests =
         []
         expr
      )
-     = Ok (TyEnum ("Option", ["Some", Type.tU8
-                             ;"None", Type.tUnit])))]
+     = Ok (TyTagUnion (["Some", Type.tU8
+                       ;"None", Type.tUnit])))]
 
 (* let () =
  *   let var1 = Type.Type.TyVar (Type.TypeVariable.create ()) in
