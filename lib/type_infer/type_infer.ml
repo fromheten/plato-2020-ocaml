@@ -9,9 +9,6 @@ let rec pow a = function
   | n -> let b = pow a (n / 2) in
          b * b * (if n mod 2 = 0 then 1 else a)
 
-(* todo rename to tVar and place accordingly *)
-let ty_var gensym_state = Type.Type.TyVar (Type.TypeVariable.create gensym_state)
-
 let rec zip xl yl =
   match (xl, yl) with
   | (x::xs, y::ys) -> (x, y) :: zip xs ys

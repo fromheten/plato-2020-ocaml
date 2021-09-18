@@ -16,7 +16,7 @@ let compile (src: string): (string, string) result =
                                           Type.tArrow
                                             Type.tString
                                             Type.tUnit]))
-      ;("string", Type.tArrow (Type_infer.ty_var env) Type.tString)
+      ;("string", Type.tArrow (Type.tVar env) Type.tString)
         (* ("Bool", Type_infer.my_Bool) *)] in
     (match
        (match (Type_infer.analyse_result
