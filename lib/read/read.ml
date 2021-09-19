@@ -433,18 +433,19 @@ let pattern expression: source -> ('a Expr.pattern) parseresult =
          Ok ((end_pos, rest), Expr.PSym (pos, s))
       | Error e -> Error e
       | _ -> failwith "you made it a result ;-)")) in
-  let tag_pattern = (map (andThen (andThen (andThen
-																						                        (literal "(")
-																						                        (orElse symbol quoted_symbol))
-													                        expression)
-				                        (literal ")"))
-                       (Util.take_ok
-                          (function
-                           | (source, ((((), Expr.Sym (name_pos, name)), child), ())) ->
-                              (source
-                              ,Expr.PTag (name_pos, name, child))
-                           | _ -> failwith "don't know hwo to handle this"
-                    ))) in
+  let tag_pattern =
+    (map (andThen (andThen (andThen
+			      (literal "(")
+			      (orElse symbol quoted_symbol))
+		     expression)
+	    (literal ")"))
+       (Util.take_ok
+          (function
+            | (source, ((((), Expr.Sym (name_pos, name)), child), ())) ->
+              (source
+              ,Expr.PTag (name_pos, name, child))
+            | _ -> failwith "don't know hwo to handle this"
+          ))) in
   (orElse symbol_pattern tag_pattern)
 
 let lambda (expression: source -> Expr.expr parseresult) (source: source): Expr.expr parseresult =
@@ -658,11 +659,11 @@ let tuple
           ,Expr.Tuple ((fst source, end_pos), children)))))
     source
 
-let annotation gensym_env (expression: source -> Expr.expr parseresult) source : Expr.expr parseresult =
+let annotation gensym_state (expression: source -> Expr.expr parseresult) source : Expr.expr parseresult =
   (map (andThen (andThen (andThen (andThen
                                      (literal "(")
                                      (literal ":"))
-                            (typ gensym_env))
+                            (typ gensym_state))
                    expression)
           (literal ")"))
      (Util.take_ok (fun ((end_pos, rest), (((((), ()), t), e), ())) ->
@@ -726,26 +727,39 @@ let dict expression source =
           ,Expr.Dict ((fst source, pos), keys_and_vals)))))
     source
 
-let enum_case source =
+let enum_no_arg_case : 'source -> (string * Type.Type.t) parseresult =
   let uppercase_symbol = symbol (* TODO ensure uppercase *) in
   (map
      uppercase_symbol
      (Util.take_ok
         (function
-          | ((new_pos, rest), Expr.Sym (_, sym)) ->
-            Printf.printf "Inside enum_case map function\n";
-            ((new_pos, rest), (sym, Type.tUnit))
+          | ((new_pos, rest), Expr.Sym (_, tag_name)) ->
+            ((new_pos, rest), (tag_name, Type.tUnit))
           | _ -> failwith "enum_case can currently only be simply symbols. Come back later...")))
-    source
 
-let enum source =
+let enum_with_arg_case typ : 'source -> (string * Type.Type.t) parseresult =
+  (map (andThen (andThen
+                   (andThen
+                      (literal "(")
+                      symbol)
+		   typ)
+	  (literal ")"))
+     (Util.take_ok
+        (function
+          | ((new_pos, rest), ((((), Expr.Sym (_, tag_name)), child_typ), ())) ->
+            ((new_pos, rest), (tag_name, child_typ))
+          | _ -> failwith "don't know hwo to handle this")))
+
+let enum typ source =
   (map
      (andThen
         (andThen
            (andThen
               (literal "(")
               (literal "enum"))
-           (n_or_more 1 enum_case))
+           (n_or_more 1 (orElse
+                           enum_no_arg_case
+                           (enum_with_arg_case typ))))
         (literal ")"))
      (Util.take_ok
         (fun
@@ -773,8 +787,8 @@ let match_expr expression source =
           ,Expr.Match ((fst source, pos), expr, expr_pattern_expr_list)))))
     source
 
-let rec expression gensym_env (source_code: source): Expr.expr parseresult =
-  let expression = expression gensym_env in
+let rec expression gensym_state (source_code: source): Expr.expr parseresult =
+  let expression = expression gensym_state in
   (orElse_list
      [ u8
      ; tuple expression
@@ -787,9 +801,9 @@ let rec expression gensym_env (source_code: source): Expr.expr parseresult =
      ; set expression
      ; lambda expression
      ; deep_lambda expression
-     ; annotation gensym_env expression
+     ; annotation gensym_state expression
      ; let_expr expression
-     ; enum
+     ; enum (typ gensym_state)
      (* ; tagged_expr expression This does not belong here, because the syntax is equal to the syntax of App.
         Since it's syntactically similar but only semantically different (depending on the type of e0), the distinction between App and TaggedValue is semantic, not syntactic *)
      ; match_expr expression

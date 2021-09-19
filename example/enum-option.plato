@@ -1,0 +1,4 @@
+(let OptionA (enum (Some a) None)
+     (let OptionB (enum (Some b) None)
+          (OptionA Some
+                   (OptionB Some (u8 123)))))

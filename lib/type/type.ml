@@ -59,9 +59,11 @@ end = struct
     | TyTag (tag, tagged_typ) ->
       "(" ^ tag ^ " " ^ to_string gensym_state tagged_typ ^ ")"
     | TyTagUnion cases ->
-      "(union " ^ String.concat " " (List.map
-                                       (to_string gensym_state)
-                                       (List.map (fun x -> TyTag x) cases))
+      "(union "
+      ^ String.concat " " (List.map
+                             (to_string gensym_state)
+                             (List.map (fun x -> TyTag x) cases))
+      ^ ")"
     | TyOp (name, types) ->
       (match types with
        | [] -> name
