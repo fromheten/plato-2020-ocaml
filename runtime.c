@@ -25,15 +25,37 @@ struct lambda {
 depends on `value`, which depends on `uvalue`. */
 typedef struct value_hamt value_hamt;
 
+struct tagged_value {
+  char *tag;
+  struct value *val;
+};
+
 union uvalue {
   char *string;
   unsigned char u8;
   const RRB *vector;
   struct lambda lambda;
   value_hamt *dict;
+  char *enum_declaration; /* The type declaration, but as a string -
+                             something to uniquely identify it.
+                             Should maybe be structured better than a
+                             string, but maybe it does not matter at
+                             runtime - types are unused at runtime
+                             anyways. */
+  struct tagged_value tagged_value;
+  int unit; /* should always be '\0' but not important - never read */
 };
 
-enum runtime_type { STRING, U8, LAMBDA, VECTOR, DICT };
+enum runtime_type {
+  STRING,
+  U8,
+  LAMBDA,
+  VECTOR,
+  DICT,
+  ENUM,
+  TAGGED_VALUE,
+  UNIT
+};
 
 typedef struct value {
   enum runtime_type type;
@@ -54,6 +76,12 @@ static inline unsigned int get_hash_from_value(value *expr) {
     return get_hash(toString(*expr).actual_value.string);
   case DICT:
     return get_hash(toString(*expr).actual_value.string);
+  case ENUM:
+    return get_hash(toString(*expr).actual_value.string);
+  case TAGGED_VALUE:
+    return get_hash(toString(*expr).actual_value.string);
+  case UNIT:
+    return 0;
   }
 }
 static inline int value_equals(void *v0, void *v1) {
@@ -115,6 +143,15 @@ struct genericContext *makeContext(size_t size, void *parent) {
   return ctx;
 }
 
+struct value makeUnit() {
+  struct value *v = (struct value *)malloc(sizeof(struct value));
+  union uvalue *uv = (union uvalue *)malloc(sizeof(union uvalue));
+  uv->unit = '\0';
+  v->type = UNIT;
+  v->actual_value = *uv;
+  return *v;
+}
+
 struct value makeString(char *s) {
   union uvalue *uv = (union uvalue *)malloc(sizeof(union uvalue));
   struct value *v = (struct value *)malloc(sizeof(struct value));
@@ -148,6 +185,30 @@ value makeDict(value_hamt *hamt) {
 
   uv->dict = hamt;
   v->type = DICT;
+  v->actual_value = *uv;
+  return *v;
+}
+
+value makeEnum(char *enum_declaration) {
+  union uvalue *uv = (union uvalue *)malloc(sizeof(union uvalue));
+  struct value *v = (struct value *)malloc(sizeof(struct value));
+
+  uv->enum_declaration = enum_declaration;
+  v->type = ENUM;
+  v->actual_value = *uv;
+  return *v;
+}
+
+value makeTaggedValue(char *tag, value *val) {
+  union uvalue *uv = (union uvalue *)malloc(sizeof(union uvalue));
+  struct value *v = (struct value *)malloc(sizeof(struct value));
+
+  struct tagged_value tagged_value;
+  /* tagged_value = malloc(sizeof(struct tagged_value)); */
+  tagged_value.tag = tag;
+  tagged_value.val = val;
+  uv->tagged_value = tagged_value;
+  v->type = TAGGED_VALUE;
   v->actual_value = *uv;
   return *v;
 }
@@ -192,6 +253,17 @@ value toString(value expr) {
             (long)expr.actual_value.lambda.fun,
             (long)expr.actual_value.lambda.ctx);
     return makeString(return_string);
+  } else if (expr.type == UNIT) {
+    return makeString("<>");
+  } else if (expr.type == TAGGED_VALUE) {
+    value tagged_val;
+    tagged_val.actual_value = expr.actual_value.tagged_value.val->actual_value;
+    tagged_val.type = expr.actual_value.tagged_value.val->type;
+    return makeString(sdscat(
+        sdscat(sdscat(sdscat(sdsnew("("), expr.actual_value.tagged_value.tag),
+                      " "),
+               toString(tagged_val).actual_value.string),
+        ")"));
   } else if (expr.type == U8) {
     // Allocates storage
     ssize_t buffer_size = snprintf(NULL, 0, "%u", expr.actual_value.u8);
@@ -221,8 +293,9 @@ value toString(value expr) {
     sds acc = "{";
     return makeString(acc);
   } else {
-    puts("Bad! toString got something it does not recognize. Error in the "
-         "compiler lol n00b :o!");
+    printf("Bad! toString got something it does not recognize, %d. \n",
+           expr.type);
+    puts("Error in the compiler lol n00b :o!\n");
     exit(1337);
   };
 }

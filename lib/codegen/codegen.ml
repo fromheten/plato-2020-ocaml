@@ -15,8 +15,12 @@ type context =
   ; vars: string list
   ; parent: context option
   } [@@deriving yojson]
-let string_of_context ctx =
-  Yojson.Safe.to_string (context_to_yojson ctx)
+
+let json_of_context =
+  Util.comp
+    Yojson.Safe.to_string
+    context_to_yojson
+
 type state =
   { lam_number: int
   ; main_code: string
@@ -103,6 +107,7 @@ let generate_match generate state x = function
 exception GenerateError of string
 
 let rec generate (expression: Expr.expr) (state: state ref): string =
+  (* Printf.printf "generate expr: %s\n" (Expr.string_of_expr (Type.new_gensym_state ()) expression); *)
   let code = ref "" in
   (match expression with
    | Let (pos, name, definition, body) ->
@@ -163,16 +168,33 @@ let rec generate (expression: Expr.expr) (state: state ref): string =
                        ; generate expr_to_convert state
                        ; ")"];
       !code
-   | App (_, e0, e1) ->
-      code := Util.str [ !code
-                       ; "callLambda("
-                       ; nt ; generate e0 state
-                       ; ".actual_value.lambda,"
-                       ; nt ; generate e1 state
-                       ; ")"];
+   | App (_, (Lam (_, _) as e0), e1) ->
+     code := Util.str [ !code
+                      ; "callLambda("
+                      ; nt ; generate e0 state
+                      ; ".actual_value.lambda,"
+                      ; nt ; generate e1 state
+                      ; ")"];
       !code
+   | App (pos, (Enum enum_typ), Sym (sym_pos, tag)) ->
+     generate
+       (Lam (pos, [(PSym (sym_pos, "tagged_value")),
+                   (TaggedValue (tag, enum_typ, Sym (sym_pos, "tagged_value")))]))
+       state
+   | App (_pos, App (_, Sym _, Sym (_, tag)), value) ->
+       (* TODO should be enum_pos *)
+     Printf.sprintf
+       "makeTaggedValue(\"%s\", (struct value*)mallocValue(%s))"
+       tag
+       (generate value state)
+   | App (_, _, _) ->
+     failwith
+       ("Can't App things but Enums and Lams. Expression: "
+        ^ (Expr.string_of_expr
+             (Type.new_gensym_state ())
+             expression))
    | Tuple (_, _children) ->
-      failwith "Think about this now.
+     failwith "Think about this now.
 
 What is a tuple concretely? It is a collection which you can match over.
 
@@ -218,11 +240,11 @@ Until I create match, I don't really have to allocate these
      (* Doesn't have to be compiled statically in any way - just make a type of value *)
      failwith "Generate C code for TaggedValue"
    | Enum (TyTagUnion cases) ->
-     failwith (Printf.sprintf
-                 "Generate C code for Enum: %s"
-                 (Type.Type.to_string
-                    (Type.new_gensym_state ())
-                    (TyTagUnion cases)))
+     let gensym_state = Type.new_gensym_state () in
+     code := (Printf.sprintf
+                "makeEnum(\"%s\")"
+                (Type.Type.to_string gensym_state (Type.Type.TyTagUnion cases)));
+     !code
    | Enum _ ->
      failwith "Generate C code for Enum")
 

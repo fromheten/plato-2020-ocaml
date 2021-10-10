@@ -4,7 +4,7 @@ Compiler taking Plato files outputting C code.
 
 ## Compilation
 
-Plato is built with Dune.
+Platoc is built with Dune, and dependencies handled with Opam.
 
 Get all dependencies: `$ opam install --deps-only .`
 
@@ -29,7 +29,8 @@ You can easily build and run the compiler inside of Docker, by running `$ docker
 
 Install the Plato platform by running `export PREFIX=/my/install/path && make install`.
 
-## TODO
+## Milestones
+### TODO
 
 * Structs/Records
 * CPS Conversion and Tail Call Elimination
@@ -38,13 +39,14 @@ Install the Plato platform by running `export PREFIX=/my/install/path && make in
 * C FFI through the command based effects system
 * `libuv` integration into said effects system
 * Pattern Matching
+* Universal quantification (types) (should I add Existential quantification as well?)
+Currently free type variables value is inferred - but there is not Forall/TypeLambda
 
-## Partially done
+### Partially done
 * DICT with HAMT Immutable HashArrayMapTrie
-Missing get, iterator, toString
-* Unions/Enums
+Implemented but missing `get`, `reduce`, `toString`
 
-## DONE
+### DONE
 
 * Dockerise compiler
 * RRB Immutable Vectors
@@ -53,6 +55,7 @@ Missing get, iterator, toString
 * C code generation
 * Hammock time
 * Base64 implementation
+* Union Types/Enum Expressions
 
 ## Licence
 

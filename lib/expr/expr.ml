@@ -15,13 +15,13 @@ type expr =
   | Unit of position
   | Vector of position * expr list
   | Set of position * expr list
-  | Ann of position * Type.Type.t * expr
+  | Ann of position * Type.Type.typ * expr (* Annotation *)
   | Dict of position * (expr * expr) list
   | Match of position * expr * (expr pattern * expr) list
   | Let of position * string * expr * expr
   | Letrec of position * string * expr * expr
-  | TaggedValue of string * Type.Type.t * expr (* tag, enum, tagged value *)
-  | Enum of Type.Type.t                        (* invariant: must be TEnum *)
+  | TaggedValue of string * Type.Type.typ * expr (* tag, enum, tagged value *)
+  | Enum of Type.Type.typ                        (* invariant: must be TyTagUnion *)
 
 let is_symbol_char c =
   not (List.exists

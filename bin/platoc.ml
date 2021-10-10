@@ -7,8 +7,8 @@ let compile (src: string): (string, string) result =
           (0
           ,(Util.char_list src)) with
   | Ok (_rest, expr) ->
-    let new_env () = (Type.new_gensym_state ()) in
-    let env = (new_env ()) in
+    let gensym_state = (Type.new_gensym_state ()) in
+    Printf.printf "\nExpr: %s" (Expr.string_of_expr gensym_state expr);
     let stdlib =
       [("Bool", Type.Type.TyTagUnion (["True", Type.tUnit
                                       ;"False", Type.tUnit]))
@@ -16,15 +16,15 @@ let compile (src: string): (string, string) result =
                                           Type.tArrow
                                             Type.tString
                                             Type.tUnit]))
-      ;("string", Type.tArrow (Type.tVar env) Type.tString)
-        (* ("Bool", Type_infer.my_Bool) *)] in
+      ;("string", Type.tArrow (Type.tVar gensym_state) Type.tString)] in
     (match
        (match (Type_infer.typeof
-                 env
+                 gensym_state
                  stdlib
                  expr) with
-       | Ok typ -> Printf.printf "\nType: %s\n" (Type.Type.to_string (Type.new_gensym_state ()) typ);
-         Ok (Type.Type.to_string (new_env ()) typ)
+       | Ok typ ->
+         Printf.printf "\nType: %s\n" (Type.Type.to_string (Type.new_gensym_state ()) typ);
+         Ok (Type.Type.to_string (Type.new_gensym_state ()) typ)
        | Error e -> Error e) with
     | Ok _typ -> Ok (Codegen.generate_program expr)
     | Error e -> Error (
@@ -132,9 +132,9 @@ let () =
      (match compile src with
       | Ok c_source ->
          (* Write message to file *)
-         let oc = open_out c_out_path in
-         Printf.fprintf oc "%s\n" c_source;
-         close_out oc;
+         let output_file_channel = open_out c_out_path in
+         Printf.fprintf output_file_channel "%s\n" c_source;
+         close_out output_file_channel;
       | Error e ->
         print_string (Util.str [ "Compilation Error: "
                                 ; e]));

@@ -25,8 +25,12 @@ type typeof_error
   | TypeError of string
   | UnificationError of string
 
-let rec typeof_exn gensym_state expr (context: (string * Type.Type.t) list) non_generic: Type.Type.t =
-  Printf.printf "In typeof: %s\n" (Expr.string_of_expr gensym_state expr);
+let rec typeof_exn
+    gensym_state
+    expr
+    (context: (string * Type.Type.typ) list)
+    (non_generic: TVSet.t)
+  : Type.Type.typ =
   match expr with
   | Expr.Sym (_pos, name) -> get_type gensym_state name context non_generic
   | App (pos,
@@ -35,7 +39,6 @@ let rec typeof_exn gensym_state expr (context: (string * Type.Type.t) list) non_
       (match List.assoc_opt enum_symbol context with
        | Some (TyTagUnion (_cases)) -> true
        | _ -> false) ->
-    Printf.printf "In the special case!\n";
     (match List.assoc enum_symbol context with
      | (TyTagUnion (cases)) ->
        (typeof_exn
@@ -54,10 +57,6 @@ let rec typeof_exn gensym_state expr (context: (string * Type.Type.t) list) non_
        let return_value = (Type.tArrow
                              (tag_type)
                              (Type.Type.TyTagUnion (cases))) in
-       Printf.printf "Enum is an Arrow! %s\n"
-         (Type.Type.to_string
-            gensym_state
-            return_value);
        return_value
      | None ->
        failwith (Printf.sprintf
@@ -121,7 +120,7 @@ let rec typeof_exn gensym_state expr (context: (string * Type.Type.t) list) non_
   | Expr.Dict (_pos, key_value_pairs) ->
     let keys = List.map fst key_value_pairs in
     let values = List.map snd key_value_pairs in
-    let unify_many (xs: Expr.expr list): Type.Type.t =
+    let unify_many (xs: Expr.expr list): Type.Type.typ =
       let new_type = Type.TypeVariable.create gensym_state in
       let new_type_param = Type.Type.TyVar new_type in
       let xs_types = (List.map (fun expr -> typeof_exn gensym_state expr context non_generic) xs) in
@@ -190,9 +189,9 @@ and get_type gensym_state name context non_generic =
          non_generic
   else raise (SymbolNotFoundError ("Undefined symbol in type inferrer: " ^ name))
 
-and fresh gensym_state t non_generic: Type.Type.t =
+and fresh gensym_state t non_generic: Type.Type.typ =
   let mappings = Hashtbl.create 30 in
-  let rec freshrec tp: Type.Type.t =
+  let rec freshrec tp: Type.Type.typ =
     let p = prune tp in
     match p with
     | Type.Type.TyVar tv ->
@@ -290,7 +289,7 @@ TyEnum ("Maybe", ty_var "a", [Ty])
   | (TyTagUnion _, (TyTagUnion _)) ->
     unify gensym_state a b
 
-and prune (t: Type.Type.t) =
+and prune (t: Type.Type.typ) =
   match t with
   | Type.Type.TyVar tv ->
     (match tv.Type.TypeVariable.instance with

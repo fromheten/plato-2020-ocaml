@@ -8,7 +8,7 @@ let new_gensym_state () = {next_variable_id = 0
 module rec TypeVariable : sig
          type t = { id: int
                   ; mutable name: string
-                  ; mutable instance: Type.t option }
+                  ; mutable instance: Type.typ option }
          val create: gensym_state -> t
          val name: gensym_state -> t -> string
          val to_string: gensym_state -> t -> string
@@ -18,7 +18,7 @@ module rec TypeVariable : sig
        end = struct
   type t = {id: int
            ;mutable name: string
-           ;mutable instance: Type.t option }
+           ;mutable instance: Type.typ option }
   let create gensym_state =
     gensym_state.next_variable_id <- gensym_state.next_variable_id + 1;
     { id = gensym_state.next_variable_id - 1
@@ -44,22 +44,22 @@ module rec TypeVariable : sig
 end
 
 and Type : sig
-  type t = TyVar of TypeVariable.t
-         | TyTag of (string * t)
-         | TyTagUnion of (string * t) list
-         | TyOp of string * Type.t list (* name, types. Think unification algorithm! *)
-  val to_string: gensym_state -> t -> string
+  type typ = TyVar of TypeVariable.t
+           | TyTag of (string * typ)
+           | TyTagUnion of (string * typ) list
+           | TyOp of string * typ list (* name, types. Think unification algorithm! *)
+  val to_string: gensym_state -> typ -> string
 end = struct
-  type t = TyVar of TypeVariable.t
-         | TyTag of (string * t)
-         | TyTagUnion of (string * t) list
-         | TyOp of string * Type.t list (* name, types. Think unification algorithm! *)
+  type typ = TyVar of TypeVariable.t
+         | TyTag of (string * typ)
+         | TyTagUnion of (string * typ) list
+         | TyOp of string * typ list (* name, types. Think unification algorithm! *)
   let rec to_string gensym_state = function
     | TyVar tv -> TypeVariable.to_string gensym_state tv ^ "-" ^ string_of_int tv.id ^ tv.name
     | TyTag (tag, tagged_typ) ->
       "(" ^ tag ^ " " ^ to_string gensym_state tagged_typ ^ ")"
     | TyTagUnion cases ->
-      "(union "
+      "(Union "
       ^ String.concat " " (List.map
                              (to_string gensym_state)
                              (List.map (fun x -> TyTag x) cases))
@@ -83,7 +83,7 @@ let tU8 = Type.TyOp ("U8", [])
 (* let tBool = Type.TyOp ("Bool", []) *)
 let tString = Type.TyOp ("String", [])
 let tUnit = Type.TyOp ("<>", [])
-let tTuple members = Type.TyOp ("Tuple", members)
+let tTuple members = Type.TyOp ("Tuple", members) (* <x y z> *)
 let tVector child = Type.TyOp ("Vector", [child])
 let tSet members = Type.TyOp ("Set", [members])
 let tDict key value = Type.TyOp ("Dict", [key; value])
