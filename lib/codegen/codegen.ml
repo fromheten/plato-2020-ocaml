@@ -168,52 +168,24 @@ let rec generate (expression: Expr.expr) (state: state ref): string =
                        ; generate expr_to_convert state
                        ; ")"];
       !code
-   | App (_, (Lam (_, _) as e0), e1) ->
-     code := Util.str [ !code
-                      ; "callLambda("
-                      ; nt ; generate e0 state
-                      ; ".actual_value.lambda,"
-                      ; nt ; generate e1 state
-                      ; ")"];
-      !code
    | App (pos, (Enum enum_typ), Sym (sym_pos, tag)) ->
      generate
        (Lam (pos, [(PSym (sym_pos, "tagged_value")),
                    (TaggedValue (tag, enum_typ, Sym (sym_pos, "tagged_value")))]))
        state
    | App (_pos, App (_, Sym _, Sym (_, tag)), value) ->
-  (* TODO should be enum_pos *)
      Printf.sprintf
        "makeTaggedValue(\"%s\", (struct value*)mallocValue(%s))"
        tag
        (generate value state)
-   | App (_, f, arg) ->
-     let expr_label = (function
-      | Expr.Sym (_, _tag) -> "sym"
-      | Lam ((_, _), _) -> "Lam"
-      | App ((_, _), _, _) -> "App"
-      | U8 ((_, _), _) -> "U8"
-      | String ((_, _), _) -> "String"
-      | Tuple ((_, _), _) -> "Tuple"
-      | Unit (_, _) -> "Unit"
-      | Vector ((_, _), _) -> "Vector"
-      | Set ((_, _), _) -> "Set"
-      | Dict ((_, _), _) -> "Dict"
-      | Ann ((_, _), _, _) -> "Ann"
-      | Match ((_, _), _, _) -> "Match"
-      | Let ((_, _), _, _, _) -> "Let"
-      | Letrec ((_, _), _, _, _) -> "Letrec"
-      | TaggedValue (_, _, _) -> "TaggedValue"
-      | Enum _ -> "Enum"
-      | TypeDef (_, _) -> "TypeDef")
-     in failwith (Printf.sprintf
-                    "Failure: tried to apply a (%s %s), but only Sym, Lam, App, and Enum can appear on the left hand side of a function application. \nExpression: %s"
-                    (expr_label f)
-                    (expr_label arg)
-                    (Expr.string_of_expr
-                       (Type.new_gensym_state ())
-                       expression))
-
+   | App (_, e0, e1) ->
+      code := Util.str [ !code
+                       ; "callLambda("
+                       ; nt ; generate e0 state
+                       ; ".actual_value.lambda,"
+                       ; nt ; generate e1 state
+                       ; ")"];
+      !code
    | Tuple (_, _children) ->
      failwith "Think about this now.
 

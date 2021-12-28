@@ -311,6 +311,7 @@ TyEnum ("Maybe", ty_var "a", [Ty])
   | (TyTagUnion _, (TyTagUnion _)) ->
     unify gensym_state a b
   | (TyOp (_, _), TyForall (_, _)) -> failwith "TODO think about this"
+  | _ -> failwith "FIX THIS"
 
 and prune (t: Type.Type.typ) =
   match t with
