@@ -1,0 +1,20 @@
+(let reduce-vector
+;; : means type annotation - (: (-> A A) (λ x x)), (: (-> A B A) (λ [x y] x)))
+;; -> is function type - the variables are filled by the type inferrer
+                         (: (-> (-> X Acc Acc) Acc [X])
+                         ;; Lambdas pattern match over the inputs
+                            (λ [f acc []] acc               ;If vector is empty, return acc
+                             ;; Vector patterns last position contains the rest
+                             ;; Capture multiple items with `[x y z rest]`
+                                [f acc [x rest]] (reduce-vector f (f x acc) rest)))
+                         reduce-dict
+                                (: (-> (-> Key Value Acc Acc)
+                                       Acc
+                                       {Key Value})
+                                   (λ [f acc {}] acc               ;If Dict is empty, return acc
+                                    ;; The last item is a Dict with the entry `key` removed
+                                                        [f acc {key value rest}] (reduce-dict f
+                                                                                         (f key
+                                                                                          value
+                                                                                          acc)
+                                                                                         rest))))

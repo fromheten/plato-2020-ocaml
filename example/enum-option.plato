@@ -1,3 +1,8 @@
+(let Option (type [A] (enum
+                       (Some A)
+                       None))
+ (Option Some (Option Some (u8 123))))
+
 (let OptionA (enum (Some a) None)
      (let OptionB (enum (Some b) None)
           (OptionA Some

@@ -6,22 +6,29 @@ type 'a pattern =
   | PTag of position * string * 'a
 
 type expr =
+  (* Beauty and Virtue *)
   | Lam of position * (expr pattern * expr) list
   | App of position * expr * expr
   | Sym of position * string
+  (* Basic types *)
   | U8 of position * int
   | String of position * string
   | Tuple of position * expr list          (* pair, sum type, nple, call it what you want *)
   | Unit of position
   | Vector of position * expr list
   | Set of position * expr list
-  | Ann of position * Type.Type.typ * expr (* Annotation *)
   | Dict of position * (expr * expr) list
+  | Ann of position * Type.Type.typ * expr (* Annotation *)
+
   | Match of position * expr * (expr pattern * expr) list
+  (* Let *)
   | Let of position * string * expr * expr
   | Letrec of position * string * expr * expr
+  (* Enum *)
   | TaggedValue of string * Type.Type.typ * expr (* tag, enum, tagged value *)
   | Enum of Type.Type.typ                        (* invariant: must be TyTagUnion *)
+  (* Forall, Λ *)
+  | TypeDef of string list * expr
 
 let is_symbol_char c =
   not (List.exists
@@ -77,7 +84,12 @@ let rec string_of_expr (gensym_env): expr -> string =
      ^ (String.concat ""
          (List.map (function
            | PTag (_ptag_pos, name, child), expr ->
-              "( " ^ name ^ " " ^ string_of_expr gensym_env child ^ ") " ^ string_of_expr gensym_env expr
+              "( "
+              ^ name
+              ^ " "
+              ^ string_of_expr gensym_env child
+              ^ ") "
+              ^ string_of_expr gensym_env expr
            | PSym (_psym_pos, x), expr ->
               string_of_expr gensym_env (Sym (_psym_pos, x))
               ^ " " ^ string_of_expr gensym_env expr)
@@ -120,3 +132,10 @@ let rec string_of_expr (gensym_env): expr -> string =
   | TaggedValue (name, _enum, value) ->
     Printf.sprintf "(%s %s)" name (string_of_expr gensym_env value)
   | Enum t -> Type.Type.to_string gensym_env t
+  | TypeDef (args, child_expr) ->
+    "(type ["
+    ^ (String.trim (String.concat " " args))
+    ^ "%s"
+    ^ "] "
+    ^ string_of_expr gensym_env child_expr
+    ^ ")"

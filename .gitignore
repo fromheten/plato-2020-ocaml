@@ -10,3 +10,4 @@ out/*
 *.merlin
 *.diff.md
 *.md.corrected
+docs/

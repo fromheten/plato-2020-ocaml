@@ -28,7 +28,7 @@ type state =
   ; structs_code: string list
   ; lambdas_code: string list
   ; current_context: context option
-  }
+}
 
 let generate_lambda generate lam_arg lam_body state =
   let current_lam_number = !state.lam_number in
@@ -68,26 +68,26 @@ let generate_lambda generate lam_arg lam_body state =
                                   [Util.str
                                      [ "struct fn_" ; string_of_int current_lam_number ; "_context_struct {"
                                        ; "struct " ; parent.name ; " * parent;"
-                                       ; nt; "struct value " ; lam_arg; ";"
-                                       ; nt; "};"]] };
+                                     ; nt; "struct value " ; lam_arg; ";"
+                                     ; nt; "};"]] };
       let context_filling_up = Util.str ["ctx->"; lam_arg ; " = "; lam_arg; ";"] in
       let body_generated = generate lam_body state in
       state :=
         { !state
-        with lambdas_code =
+          with lambdas_code =
                (List.append
                   !state.lambdas_code
                   [Util.str
                      [ "struct value fn_"; string_of_int current_lam_number; "_lambda_fn(\n"
                        ; t; "struct fn_"; string_of_int current_lam_number; "_context_struct * ctx,"
-                       ; nt; "struct value "; lam_arg
-                       ;n ; ") {"
-                       ; nt ;"// Add argument to the current context, so that it is accessable here and in children"
-                       ; nt
-                       ; context_filling_up
-                       ; nt ; "return "; body_generated; ";"
-                       ; n ;"}"
-                       ; n]])};
+                     ; nt; "struct value "; lam_arg
+                     ;n ; ") {"
+                     ; nt ;"// Add argument to the current context, so that it is accessable here and in children"
+                     ; nt
+                     ; context_filling_up
+                     ; nt ; "return "; body_generated; ";"
+                     ; n ;"}"
+                     ; n]])};
       state := { !state with current_context = Some parent};
       final_string
    | None -> final_string)
@@ -182,26 +182,47 @@ let rec generate (expression: Expr.expr) (state: state ref): string =
                    (TaggedValue (tag, enum_typ, Sym (sym_pos, "tagged_value")))]))
        state
    | App (_pos, App (_, Sym _, Sym (_, tag)), value) ->
-       (* TODO should be enum_pos *)
+  (* TODO should be enum_pos *)
      Printf.sprintf
        "makeTaggedValue(\"%s\", (struct value*)mallocValue(%s))"
        tag
        (generate value state)
-   | App (_, _, _) ->
-     failwith
-       ("Can't App things but Enums and Lams. Expression: "
-        ^ (Expr.string_of_expr
-             (Type.new_gensym_state ())
-             expression))
+   | App (_, f, arg) ->
+     let expr_label = (function
+      | Expr.Sym (_, _tag) -> "sym"
+      | Lam ((_, _), _) -> "Lam"
+      | App ((_, _), _, _) -> "App"
+      | U8 ((_, _), _) -> "U8"
+      | String ((_, _), _) -> "String"
+      | Tuple ((_, _), _) -> "Tuple"
+      | Unit (_, _) -> "Unit"
+      | Vector ((_, _), _) -> "Vector"
+      | Set ((_, _), _) -> "Set"
+      | Dict ((_, _), _) -> "Dict"
+      | Ann ((_, _), _, _) -> "Ann"
+      | Match ((_, _), _, _) -> "Match"
+      | Let ((_, _), _, _, _) -> "Let"
+      | Letrec ((_, _), _, _, _) -> "Letrec"
+      | TaggedValue (_, _, _) -> "TaggedValue"
+      | Enum _ -> "Enum"
+      | TypeDef (_, _) -> "TypeDef")
+     in failwith (Printf.sprintf
+                    "Failure: tried to apply a (%s %s), but only Sym, Lam, App, and Enum can appear on the left hand side of a function application. \nExpression: %s"
+                    (expr_label f)
+                    (expr_label arg)
+                    (Expr.string_of_expr
+                       (Type.new_gensym_state ())
+                       expression))
+
    | Tuple (_, _children) ->
      failwith "Think about this now.
 
-What is a tuple concretely? It is a collection which you can match over.
+     What is a tuple concretely? It is a collection which you can match over.
 
-You get from a tuple by matching `(match <1 2 3> <n0 n1 n2> n2)` => `3`
+     You get from a tuple by matching `(match <1 2 3> <n0 n1 n2> n2)` => `3`
 
-Until I create match, I don't really have to allocate these
-"
+     Until I create match, I don't really have to allocate these
+     "
    | Vector (_, children) ->
      let rec fill_vector children acc =
        (match children with
@@ -236,7 +257,7 @@ Until I create match, I don't really have to allocate these
       let generate_match = generate_match generate state in
       generate_match x cases
    | TaggedValue (_name, _enum, _value) ->
-     (* TaggedValue and Enum can really be just runtime values you pass around *)
+  (* TaggedValue and Enum can really be just runtime values you pass around *)
      (* Doesn't have to be compiled statically in any way - just make a type of value *)
      failwith "Generate C code for TaggedValue"
    | Enum (TyTagUnion cases) ->
@@ -246,7 +267,9 @@ Until I create match, I don't really have to allocate these
                 (Type.Type.to_string gensym_state (Type.Type.TyTagUnion cases)));
      !code
    | Enum _ ->
-     failwith "Generate C code for Enum")
+     failwith "Generate C code for Enum"
+   | TypeDef (_args, child_expr) ->
+     generate child_expr state)
 
 
 let generate_program expression =

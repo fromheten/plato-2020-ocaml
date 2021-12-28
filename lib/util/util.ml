@@ -97,6 +97,17 @@ let all_ok results =
       Ok acc in
   inner [] results
 
+let all_some options =
+  let rec inner acc rest =
+    match rest with
+    | Some value :: rest ->
+      inner (value :: acc) rest
+    | None :: _rest ->
+      None
+    | [] ->
+      Some acc in
+  inner [] options
+
 let all_oks results =
   let rec inner results vals errs =
     match results with

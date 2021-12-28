@@ -285,7 +285,7 @@ let literal_tests =
 let andThen p0 p1 (source: source) =
   match p0 source with
   | Ok ((rest_pos, rest), r0) ->
-     (match p1 (rest_pos, rest) with
+    (match p1 (rest_pos, rest) with
      | Ok ((end_pos, rest), r1) ->
        Ok ((end_pos
            ,rest)
@@ -788,6 +788,33 @@ let match_expr expression source =
           ,Expr.Match ((fst source, pos), expr, expr_pattern_expr_list)))))
     source
 
+let string_of_sym = function
+  | Expr.Sym (_pos, s) -> Some s
+  | _ -> None
+
+let type_def expression source =
+  (map
+     (andThen
+        (andThen
+           (andThen
+              (andThen (literal "(") (literal "type"))
+              (vector expression))
+           expression)
+        (literal ")"))
+     (Util.take_ok
+        (function
+          |  (new_state, (((((), ()), Expr.Vector (_vec_pos, args)) , child_expr), ())) ->
+            (match Util.all_some (List.map string_of_sym args) with
+             | Some args -> (new_state, Expr.TypeDef (args, child_expr))
+             | None -> failwith "NOt all args to TypeDef are symbols"            )
+
+          | _ -> failwith "Need a vector in TypeDef"        )
+
+     )
+  )
+    source
+(* (0, Util.char_list "(type [a b] (: (-> a b a) (λ [x y] x)))") *)
+
 let rec expression gensym_state (source_code: source) : Expr.expr parseresult =
   let expression = expression gensym_state in
   (orElse_list
@@ -805,6 +832,7 @@ let rec expression gensym_state (source_code: source) : Expr.expr parseresult =
      ; annotation gensym_state expression
      ; let_expr expression
      ; enum (typ gensym_state)
+     ; type_def expression
      (* ; tagged_expr expression This does not belong here, because the syntax is equal to the syntax of App.
         Since it's syntactically similar but only semantically different (depending on the type of e0), the distinction between App and TaggedValue is semantic, not syntactic *)
      ; match_expr expression
@@ -929,7 +957,10 @@ let expression_tests =
             Dict ((0, 19),
                   [(String ((1, 5), "ichi"), Sym ((6, 7), "1"));
                    (String ((8, 10), "ni"), Sym ((11, 12), "2"));
-                   (String ((13, 16), "san"), Sym ((17, 18), "3"))])))]
+                   (String ((13, 16), "san"), Sym ((17, 18), "3"))])))
+    (* ;("Parse universal types"
+     *  , expression (Type.new_gensym_state ()) (0, Util.char_list "(type [a b] (: (-> a b a)) (λ [x y] x))")
+     * ) *)]
 
 let typ_tests =
   [("Longbow arrows"

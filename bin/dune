@@ -3,6 +3,7 @@
  (libraries expr
             read
             util
+            type
             type_infer
             ; unify
             codegen

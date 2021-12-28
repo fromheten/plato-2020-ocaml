@@ -1,5 +1,6 @@
 (* GREAT reading resources on type inferrence:
  * http://www.cs.tau.ac.il/~msagiv/courses/pl15/hindley_milner.change_to_py
+ * https://github.com/rob-smallshire/hindley-milner-python/blob/master/inference.py
  * https://www.cs.cornell.edu/courses/cs3110/2011sp/Lectures/lec26-type-inference/type-inference.htm
 *)
 
@@ -173,6 +174,20 @@ let rec typeof_exn
                 name)
   | Enum t ->
     t
+  | TypeDef (args, child_expr) ->
+    Printf.printf "Got into TypeDef";
+    (match List.nth_opt args 0 with
+    | Some first_arg ->
+      Type.Type.TyForall (first_arg, typeof_exn
+                                       gensym_state
+                                       child_expr
+                                       context
+                                       non_generic)
+      | None -> typeof_exn
+                                       gensym_state
+                                       child_expr
+                                       context
+                                       non_generic)
 
 and string_of_context gensym_state =
   let rec inner acc = function
@@ -212,6 +227,8 @@ and fresh gensym_state t non_generic: Type.Type.typ =
                           child_types)
     | Type.Type.TyOp (name, child_types) ->
       Type.Type.TyOp (name, (List.map (fun x -> freshrec x) child_types))
+    | Type.Type.TyForall (name, child_type) ->
+      Type.Type.TyForall (name, freshrec child_type)
   in freshrec t
 
 (* Har igång type inferrence som kan göra letrec nu, Hindley Milner.
@@ -227,6 +244,11 @@ Makes the types t1 and t2 the same *)
 and unify gensym_state t1 t2: unit =
   let a = prune t1 in
   let b = prune t2 in
+  let printf_gensym_state = Type.new_gensym_state () in
+  Printf.printf
+    "unify: a=%s b=%s"
+    (Type.Type.to_string printf_gensym_state t1)
+    (Type.Type.to_string printf_gensym_state t2);
   match (a, b) with
   | (Type.Type.TyVar tyvar, _) ->
      if a <> b
@@ -288,6 +310,7 @@ TyEnum ("Maybe", ty_var "a", [Ty])
     else raise (TypeError "Given two TyTag but they are not of the same tag name")
   | (TyTagUnion _, (TyTagUnion _)) ->
     unify gensym_state a b
+  | (TyOp (_, _), TyForall (_, _)) -> failwith "TODO think about this"
 
 and prune (t: Type.Type.typ) =
   match t with

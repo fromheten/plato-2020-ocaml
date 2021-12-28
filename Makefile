@@ -5,3 +5,6 @@ install: bin/ lib/
 
 shelltest.diff.md: shelltest.md
 	ocaml-mdx test -v shelltest.md && diff shelltest.md shelltest.md.corrected > shelltest.diff.md
+
+docs/: lib/ bin/
+	ocamldoc -html -d docs/ **/*.ml

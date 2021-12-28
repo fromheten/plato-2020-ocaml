@@ -48,12 +48,14 @@ and Type : sig
            | TyTag of (string * typ)
            | TyTagUnion of (string * typ) list
            | TyOp of string * typ list (* name, types. Think unification algorithm! *)
+           | TyForall of string * typ  (* (Λ A (Λ B (: (-> A B B) (λ [x y] y)))) *)
   val to_string: gensym_state -> typ -> string
 end = struct
   type typ = TyVar of TypeVariable.t
-         | TyTag of (string * typ)
-         | TyTagUnion of (string * typ) list
-         | TyOp of string * typ list (* name, types. Think unification algorithm! *)
+           | TyTag of (string * typ)
+           | TyTagUnion of (string * typ) list
+           | TyOp of string * typ list (* name, types. Think unification algorithm! *)
+           | TyForall of string * typ  (* (Λ A (Λ B (: (-> A B B) (λ [x y] y)))) *)
   let rec to_string gensym_state = function
     | TyVar tv -> TypeVariable.to_string gensym_state tv ^ "-" ^ string_of_int tv.id ^ tv.name
     | TyTag (tag, tagged_typ) ->
@@ -76,6 +78,11 @@ end = struct
               |> List.map (Type.to_string gensym_state)
               |> List.fold_left (fun a b -> a ^ " " ^ b) ""
               |> Printf.sprintf "%s %s" name)
+    | TyForall (name, typ) ->
+      Printf.sprintf
+        "(Λ %s %s)"
+        name
+        (to_string gensym_state typ)
 end
 
 let tArrow from_type to_type = Type.TyOp ("->", [from_type; to_type])
@@ -88,3 +95,6 @@ let tVector child = Type.TyOp ("Vector", [child])
 let tSet members = Type.TyOp ("Set", [members])
 let tDict key value = Type.TyOp ("Dict", [key; value])
 let tVar gensym_state = Type.TyVar (TypeVariable.create gensym_state)
+
+let type_tests =
+  []

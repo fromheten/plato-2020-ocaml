@@ -1,5 +1,8 @@
-(lang dune 2.7.1)
+(lang dune 2.8)
 (name platoc-2020)
+(version 0)
+(authors "Martin Josefsson")
+(homepage "https://github.com/fromheten/plato-2020-ocaml")
 (generate_opam_files true)
 
 (package
