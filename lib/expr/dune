@@ -1,4 +1,3 @@
 (library
  (name expr)
- (libraries type
-            util))
+ (libraries type util))

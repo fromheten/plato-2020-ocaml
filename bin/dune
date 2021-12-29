@@ -1,10 +1,11 @@
 (executable
  (name platoc)
- (libraries expr
-            read
-            util
-            type
-            type_infer
-            ; unify
-            codegen
-            cryptokit))
+ (libraries
+  expr
+  read
+  util
+  type
+  type_infer
+  ; unify
+  codegen
+  cryptokit))
