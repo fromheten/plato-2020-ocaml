@@ -594,11 +594,12 @@ let tarrow (typ: source -> Type.Type.typ parseresult) source : Type.Type.typ par
 let tsym global_env source: Type.Type.typ parseresult =
   (map (orElse symbol quoted_symbol)
      (function
-       | Ok ((rest, index), Sym (_pos, s)) ->
+       | Ok ((rest, index), Sym (pos, s)) ->
+         let tv = Type.TypeVariable.create global_env in
+         tv.name <- s;
          Ok ((rest, index),
              Type.Type.TyVar
-               (let tv = Type.TypeVariable.create global_env in
-                tv.name <- s;
+               (pos,
                 tv))
        | _ -> Error "Not a symbol"))
     source
@@ -764,9 +765,9 @@ let enum typ source =
         (literal ")"))
      (Util.take_ok
         (fun
-          ((pos, rest), ((((), ()), cases), ())) ->
-          ((pos, rest),
-           Expr.Enum ((* (fst source, pos),  *)Type.Type.TyTagUnion cases)))))
+          ((index, rest), ((((), ()), cases), ())) ->
+          ((index, rest),
+           Expr.Enum (Type.Type.TyTagUnion ((fst source, index), cases))))))
     source
 
 let match_expr expression source =
@@ -805,7 +806,7 @@ let type_def expression source =
         (function
           |  (new_state, (((((), ()), Expr.Vector (_vec_pos, args)) , child_expr), ())) ->
             (match Util.all_some (List.map string_of_sym args) with
-             | Some args -> (new_state, Expr.TypeDef (args, child_expr))
+             | Some args -> (new_state, Expr.TypeDef ((fst source, fst new_state), args, child_expr))
              | None -> failwith "NOt all args to TypeDef are symbols"            )
 
           | _ -> failwith "Need a vector in TypeDef"        )
@@ -889,15 +890,16 @@ let expression_tests =
         ((27, []),
          Ann ((0, 27),
               Type.Type.TyOp
-                ("->",
-                 [Type.Type.TyVar
-                    {Type.TypeVariable.id = 0; name = "X"; instance = None};
-                  Type.Type.TyOp
-                    ("->",
-                     [Type.Type.TyVar
-                        {Type.TypeVariable.id = 1; name = "Y"; instance = None};
+                (negpos,
+                 "->",
+                 [Type.Type.TyVar (negpos, {Type.TypeVariable.id = 0; name = "X"; instance = None})
+                  ;Type.Type.TyOp
+                    (negpos
+                    , "->"
+                    , [Type.Type.TyVar
+                        (negpos, {Type.TypeVariable.id = 1; name = "Y"; instance = None});
                       Type.Type.TyVar
-                        {Type.TypeVariable.id = 2; name = "X"; instance = None}])]),
+                        (negpos, {Type.TypeVariable.id = 2; name = "X"; instance = None})])]),
               Lam ((26, 27),
                    [(PSym ((19, 20), "x"),
                      Lam ((26, 27), [(PSym ((21, 22), "y"), Sym ((24, 25), "x"))]))]))))
@@ -909,15 +911,17 @@ let expression_tests =
               App ((0, 41),
                    Ann ((1, 28),
                         Type.Type.TyOp
-                          ("->",
+                          (negpos,
+                           "->",
                            [Type.Type.TyVar
-                              {Type.TypeVariable.id = 0; name = "X"; instance = None};
+                              (negpos, {Type.TypeVariable.id = 0; name = "X"; instance = None});
                             Type.Type.TyOp
-                              ("->",
+                              (negpos,
+                               "->",
                                [Type.Type.TyVar
-                                  {Type.TypeVariable.id = 1; name = "Y"; instance = None};
+                                  (negpos, {Type.TypeVariable.id = 1; name = "Y"; instance = None});
                                 Type.Type.TyVar
-                                  {Type.TypeVariable.id = 2; name = "X"; instance = None}])]),
+                                  (negpos, {Type.TypeVariable.id = 2; name = "X"; instance = None})])]),
                         Lam ((27, 28),
                              [(PSym ((20, 21), "x"),
                                Lam ((27, 28), [(PSym ((22, 23), "y"), Sym ((25, 26), "x"))]))])),
@@ -970,15 +974,16 @@ let typ_tests =
      = Ok
        ((10, []),
         Type.Type.TyOp
-          ("->",
+          (negpos,
+           "->",
            [Type.Type.TyVar
-              {Type.TypeVariable.id = 0; name = "X"; instance = None};
+              (negpos, {Type.TypeVariable.id = 0; name = "X"; instance = None});
             Type.Type.TyOp
-              ("->",
+              (negpos, "->",
                [Type.Type.TyVar
-                  {Type.TypeVariable.id = 1; name = "Y"; instance = None};
+                  (negpos, {Type.TypeVariable.id = 1; name = "Y"; instance = None});
                 Type.Type.TyVar
-                  {Type.TypeVariable.id = 2; name = "X"; instance = None}])])))]
+                  (negpos, {Type.TypeVariable.id = 2; name = "X"; instance = None})])])))]
 
 
 let src_to_src src =

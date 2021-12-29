@@ -1,4 +1,5 @@
 (* This is the main entrypoint of the Plato compiler *)
+let negpos = (-1, -1)
 
 let compile (src: string): (string, string) result =
   let gensym_env = (Type.new_gensym_state ()) in
@@ -8,14 +9,16 @@ let compile (src: string): (string, string) result =
           ,(Util.char_list src)) with
   | Ok (_rest, expr) ->
     let gensym_state = (Type.new_gensym_state ()) in
-    Printf.printf "\nExpr: %s" (Expr.string_of_expr gensym_state expr);
+    Printf.printf "\nExpr: \n%s\n" (Expr.string_of_expr gensym_state expr);
     let stdlib =
-      [("Bool", Type.Type.TyTagUnion (["True", Type.tUnit
+      [("Bool", Type.Type.TyTagUnion (negpos,
+                                      ["True", Type.tUnit
                                       ;"False", Type.tUnit]))
-      ;("Command", Type.Type.TyTagUnion (["Log",
-                                          Type.tArrow
-                                            Type.tString
-                                            Type.tUnit]))
+      ;("Command", Type.Type.TyTagUnion (negpos,
+                                         ["Log",
+                                         Type.tArrow
+                                           Type.tString
+                                           Type.tUnit]))
       ;("string", Type.tArrow (Type.tVar gensym_state) Type.tString)] in
     (match
        (match (Type_infer.typeof
@@ -23,19 +26,18 @@ let compile (src: string): (string, string) result =
                  stdlib
                  expr) with
        | Ok typ ->
-         Printf.printf "\nType: %s\n" (Type.Type.to_string (Type.new_gensym_state ()) typ);
+         Printf.printf "\nType: \n%s\n" (Type.Type.to_string (Type.new_gensym_state ()) typ);
          Ok (Type.Type.to_string (Type.new_gensym_state ()) typ)
        | Error e -> Error e) with
     | Ok _typ -> Ok (Codegen.generate_program expr)
     | Error e -> Error (
         (match e with
-         | Type_infer.SymbolNotFoundError msg  ->
-           "SymbolNotFoundError: " ^  msg
+         | Type_infer.UndefinedSymbolInTypeInferrer (pos, msg) ->
+           "UndefinedSymbolInTypeInferrer pos: " ^ Util.string_of_pos pos ^ ", message: " ^  msg
          | Type_infer.TypeError msg ->
            "TypeError: " ^  msg
          | Type_infer.UnificationError msg ->
-           "UnificationError: " ^  msg)
-        ^ Printf.sprintf "\nParsed expression: %s\n" (Expr.string_of_expr gensym_env expr));
+           "UnificationError: " ^  msg));
     )
   | Error e ->
     Error (Util.str ["`Platoc.compile` Error: e: "

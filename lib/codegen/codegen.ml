@@ -232,15 +232,15 @@ let rec generate (expression: Expr.expr) (state: state ref): string =
   (* TaggedValue and Enum can really be just runtime values you pass around *)
      (* Doesn't have to be compiled statically in any way - just make a type of value *)
      failwith "Generate C code for TaggedValue"
-   | Enum (TyTagUnion cases) ->
+   | Enum (TyTagUnion (pos, cases)) ->
      let gensym_state = Type.new_gensym_state () in
      code := (Printf.sprintf
                 "makeEnum(\"%s\")"
-                (Type.Type.to_string gensym_state (Type.Type.TyTagUnion cases)));
+                (Type.Type.to_string gensym_state (Type.Type.TyTagUnion (pos, cases))));
      !code
    | Enum _ ->
      failwith "Generate C code for Enum"
-   | TypeDef (_args, child_expr) ->
+   | TypeDef (_, _args, child_expr) ->
      generate child_expr state)
 
 

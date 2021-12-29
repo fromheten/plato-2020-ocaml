@@ -26,9 +26,9 @@ type expr =
   | Letrec of position * string * expr * expr
   (* Enum *)
   | TaggedValue of string * Type.Type.typ * expr (* tag, enum, tagged value *)
-  | Enum of Type.Type.typ                        (* invariant: must be TyTagUnion *)
+  | Enum of Type.Type.typ                        (* invariant: must be TyTagUnion, therefore doesnt need a pos *)
   (* Forall, Λ *)
-  | TypeDef of string list * expr
+  | TypeDef of position * string list * expr
 
 let is_symbol_char c =
   not (List.exists
@@ -132,7 +132,7 @@ let rec string_of_expr (gensym_env): expr -> string =
   | TaggedValue (name, _enum, value) ->
     Printf.sprintf "(%s %s)" name (string_of_expr gensym_env value)
   | Enum t -> Type.Type.to_string gensym_env t
-  | TypeDef (args, child_expr) ->
+  | TypeDef (_pos, args, child_expr) ->
     "(type ["
     ^ (String.trim (String.concat " " args))
     ^ "%s"
