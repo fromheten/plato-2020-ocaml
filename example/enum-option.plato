@@ -2,12 +2,3 @@
                        (Some A)
                        None))
  (Option Some (Option Some (u8 123))))
-
-;; (let OptionA (enum (Some a) None)
-;;      (let OptionB (enum (Some b) None)
-;;           (OptionA Some
-;;                    (OptionB Some (u8 123)))))
-;;
-;; This is how I want it to be, when universal quantification works properly
-;; Extra syntax for type functions/universal types is required, because free variables value is simply inferred
-;; (let Option (type [a] (Some a) None) (Option Some (u8 123)))
