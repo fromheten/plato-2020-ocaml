@@ -55,11 +55,31 @@ let generate_lambda generate lam_arg lam_body state =
   in
   state := { !state with current_context = Some context };
   let final_string =
-    Printf.sprintf
-      "makeLambda(fn_%s_lambda_fn, makeContext(struct fn_%s_context_struct), \
-       ctx)"
-      (string_of_int current_lam_number)
-      (string_of_int current_lam_number)
+    Util.str
+      [ "makeLambda("
+      ; nt
+      ; "fn_"
+      ; string_of_int current_lam_number
+      ; "_lambda_fn,"
+      ; nt
+      ; t
+      ; "makeContext("
+      ; nt
+      ; t
+      ; "sizeof("
+      ; nt
+      ; t
+      ; t
+      ; "struct fn_"
+      ; string_of_int current_lam_number
+      ; "_context_struct"
+      ; nt
+      ; "), "
+      ; nt
+      ; "ctx)"
+      ; nt
+      ; ")"
+      ]
   in
   match context.parent with
   | Some parent ->
@@ -68,11 +88,20 @@ let generate_lambda generate lam_arg lam_body state =
         structs_code =
           List.append
             !state.structs_code
-            [ Printf.sprintf
-                "struct fn_%s_context_struct {stuct * parent;\n\
-                \                struct value %s;};"
-                (string_of_int current_lam_number)
-                parent.name
+            [ Util.str
+                [ "struct fn_"
+                ; string_of_int current_lam_number
+                ; "_context_struct {"
+                ; "struct "
+                ; parent.name
+                ; " * parent;"
+                ; nt
+                ; "struct value "
+                ; lam_arg
+                ; ";"
+                ; nt
+                ; "};"
+                ]
             ]
       };
     let context_filling_up =

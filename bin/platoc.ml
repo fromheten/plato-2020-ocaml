@@ -6,7 +6,7 @@ let compile (src : string) : (string, string) result =
   match Read.expression gensym_env (0, Util.char_list src) with
   | Ok (_rest, expr) ->
     let gensym_state = Type.new_gensym_state () in
-    Printf.printf "\nExpr: \n%s\n" (Expr.string_of_expr gensym_state expr);
+    Printf.printf "\nExpr:\n%s\n" (Expr.string_of_expr gensym_state expr);
     let stdlib =
       [ ( "Bool"
         , Type.Type.TyTagUnion

@@ -1,0 +1,2 @@
+(let Bool (enum (Some U8) None)
+ (Bool Some (u8 123)))
