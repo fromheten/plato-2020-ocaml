@@ -6,6 +6,7 @@
   util
   type
   type_infer
+  hmport
   ; unify
   codegen
   cryptokit))

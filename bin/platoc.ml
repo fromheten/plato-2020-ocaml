@@ -5,38 +5,13 @@ let compile (src : string) : (string, string) result =
   let gensym_env = Type.new_gensym_state () in
   match Read.expression gensym_env (0, Util.char_list src) with
   | Ok (_rest, expr) ->
-    let gensym_state = Type.new_gensym_state () in
-    Printf.printf "\nExpr:\n%s\n" (Expr.string_of_expr gensym_state expr);
-    let stdlib =
-      [ ( "Bool"
-        , Type.Type.TyTagUnion
-            (negpos, [ ("True", Type.tUnit); ("False", Type.tUnit) ]) )
-      ; ( "Command"
-        , Type.Type.TyTagUnion
-            (negpos, [ ("Log", Type.tArrow Type.tString Type.tUnit) ]) )
-      ; ("string", Type.tArrow (Type.tVar gensym_state) Type.tString)
-      ]
-    in
-    ( match
-        match Type_infer.typeof gensym_state stdlib expr with
-        | Ok typ ->
-          Printf.printf
-            "\nType: \n%s\n"
-            (Type.Type.to_string (Type.new_gensym_state ()) typ);
-          Ok (Type.Type.to_string (Type.new_gensym_state ()) typ)
-        | Error e -> Error e
-      with
-    | Ok _typ -> Ok (Codegen.generate_program expr)
-    | Error e ->
-      Error
-        ( match e with
-        | Type_infer.UndefinedSymbolInTypeInferrer (pos, msg) ->
-          "UndefinedSymbolInTypeInferrer pos: "
-          ^ Util.string_of_pos pos
-          ^ ", message: "
-          ^ msg
-        | Type_infer.TypeError msg -> "TypeError: " ^ msg
-        | Type_infer.UnificationError msg -> "UnificationError: " ^ msg ) )
+    Printf.printf "\nExpr:\n%s\n" (snd (Expr.string_of_expr (0, 'a') expr));
+    let type_result = Ok (Hmport.infer [] expr) in
+    ( match type_result with
+    | Ok typ ->
+      Printf.printf "%s" (Hmport.string_of_typ typ);
+      Ok (Codegen.generate_program expr)
+    | Error e -> failwith e )
   | Error e -> Error (Util.str [ "`Platoc.compile` Error: e: "; e ])
 
 
@@ -76,7 +51,9 @@ let print_tests_results =
     ; Read.string_tests
     ; Codegen.ocaml_import_tests
     ; Read.string_of_expr_tests
-    ; Type_infer.type_infer_tests
+      (* ; Type_infer.type_infer_tests
+       * ; Type_infer.fresh_tests *)
+      (* ; Type.type_tests *)
     ]
   |> test
 

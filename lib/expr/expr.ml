@@ -58,101 +58,114 @@ let string_of_sym (s : string) : string =
   else s
 
 
+(* TODO This depends on string_of_value being stateful *)
 let string_of_pattern string_of_value : expr pattern -> string = function
   | PSym (_pos, s) -> string_of_sym s
   | PTag (_pos, tag, value) ->
     "(" ^ string_of_sym tag ^ " " ^ string_of_value value ^ ")"
 
 
-let rec string_of_expr gensym_env : expr -> string = function
+let string_of_pattern_pure state string_of_value = function
+  | PSym (_pos, s) -> (state, string_of_sym s)
+  | PTag (_pos, tag, value) ->
+    let state, value_string = string_of_value state value in
+    (state, "(" ^ string_of_sym tag ^ " " ^ value_string ^ ")")
+
+
+let rec string_of_expr (state : 'state) : expr -> 'state * string = function
   | Let (_pos, name, definition, body) ->
-    Printf.sprintf
-      "(let %s %s\n  %s)"
-      name
-      (string_of_expr gensym_env definition)
-      (string_of_expr gensym_env body)
+    let state, definition_string = string_of_expr state definition in
+    let state, body_string = string_of_expr state body in
+    ( state
+    , Printf.sprintf "(let %s %s\n  %s)" name definition_string body_string )
   | Letrec (_pos, name, definition, body) ->
-    Printf.sprintf
-      "(letrec %s %s\n  %s)"
-      name
-      (string_of_expr gensym_env definition)
-      (string_of_expr gensym_env body)
-  | U8 (_pos, i) -> "(u8 " ^ string_of_int i ^ ")"
-  | Sym (_pos, s) -> string_of_sym s
+    let state, definition_string = string_of_expr state definition in
+    let state, body_string = string_of_expr state body in
+    ( state
+    , Printf.sprintf "(letrec %s %s\n  %s)" name definition_string body_string
+    )
+  | U8 (_pos, i) -> (state, "(u8 " ^ string_of_int i ^ ")")
+  | Sym (_pos, s) -> (state, string_of_sym s)
   | Lam (_pos, patterns_exprs) ->
-    "(λ "
-    ^ String.concat
-        ""
-        (List.map
-           (function
-             | PTag (_ptag_pos, name, child), expr ->
-               "( "
-               ^ name
-               ^ " "
-               ^ string_of_expr gensym_env child
-               ^ ") "
-               ^ string_of_expr gensym_env expr
-             | PSym (_psym_pos, x), expr ->
-               string_of_expr gensym_env (Sym (_psym_pos, x))
-               ^ " "
-               ^ string_of_expr gensym_env expr )
-           patterns_exprs )
-    ^ ")"
+    let state, strings =
+      State.map
+        (fun state -> function
+          | PTag (_ptag_pos, name, child), expr ->
+            let state, child_string = string_of_expr state child in
+            let state, expr_string = string_of_expr state expr in
+            (state, "( " ^ name ^ " " ^ child_string ^ ") " ^ expr_string)
+          | PSym (_psym_pos, x), expr ->
+            let state, x_string = string_of_expr state (Sym (_psym_pos, x)) in
+            let state, expr_string = string_of_expr state expr in
+            (state, x_string ^ " " ^ expr_string) )
+        []
+        state
+        patterns_exprs
+    in
+    (state, "(λ " ^ String.concat "" strings ^ ")")
   | App (_pos, e0, e1) ->
-    "("
-    ^ string_of_expr gensym_env e0
-    ^ " "
-    ^ string_of_expr gensym_env e1
-    ^ ")"
+    let state, e0_string = string_of_expr state e0 in
+    let state, e1_string = string_of_expr state e1 in
+    (state, "(" ^ e0_string ^ " " ^ e1_string ^ ")")
   | Match (_pos, x, cases) ->
-    "(match "
-    ^ string_of_expr gensym_env x
-    ^ String.concat
-        ""
-        (List.map
-           (fun (pattern, expr) ->
-             " "
-             ^ string_of_pattern (string_of_expr gensym_env) pattern
-             ^ " "
-             ^ string_of_expr gensym_env expr )
-           cases )
-    ^ ")"
-  | String (_pos, s) -> "\"" ^ s ^ "\""
+    let state, x_string = string_of_expr state x in
+    let state, cases_strings =
+      State.map
+        (fun state (pattern, expr) ->
+          let state, pattern_string =
+            string_of_pattern_pure state string_of_expr pattern
+          in
+          let state, expr_string = string_of_expr state expr in
+          (state, " " ^ pattern_string ^ " " ^ expr_string) )
+        []
+        state
+        cases
+    in
+
+    (state, "(match " ^ x_string ^ String.concat "" cases_strings ^ ")")
+  | String (_pos, s) -> (state, "\"" ^ s ^ "\"")
   | Tuple (_pos, exprs) ->
-    "<" ^ String.concat " " (List.map (string_of_expr gensym_env) exprs) ^ ">"
-  | Unit _pos -> "<>"
+    let state, exprs_strings =
+      State.map (fun state -> string_of_expr state) [] state exprs
+    in
+    (state, "<" ^ String.concat " " exprs_strings ^ ">")
+  | Unit _pos -> (state, "<>")
   | Vector (_pos, exprs) ->
-    Printf.sprintf
-      "[%s]"
-      (String.concat " " (List.map (string_of_expr gensym_env) exprs))
+    let state, exprs_strings =
+      State.map (fun state -> string_of_expr state) [] state exprs
+    in
+    (state, Printf.sprintf "[%s]" (String.concat " " exprs_strings))
   | Set (_pos, exprs) ->
-    Printf.sprintf
-      "#{%s}#"
-      (String.concat " " (List.map (string_of_expr gensym_env) exprs))
+    let state, exprs_strings =
+      State.map (fun state -> string_of_expr state) [] state exprs
+    in
+    (state, Printf.sprintf "#{%s}#" (String.concat " " exprs_strings))
   | Ann (_pos, t, e) ->
-    Printf.sprintf
-      "(Ann %s %s)"
-      (Type.Type.to_string gensym_env t)
-      (string_of_expr gensym_env e)
+    let state, typ_string = Type.string_of_typ state t in
+    let state, expr_string = string_of_expr state e in
+    (state, Printf.sprintf "(: %s %s)" typ_string expr_string)
   | Dict (_pos, keys_and_vals) ->
-    Printf.sprintf
-      "{%s}"
-      (String.concat
-         " "
-         (List.map
-            (fun (key, value) ->
-              Printf.sprintf
-                "%s %s"
-                (string_of_expr gensym_env key)
-                (string_of_expr gensym_env value) )
-            keys_and_vals ) )
+    let state, keyvalue_strings =
+      State.map
+        (fun state (key, value) ->
+          let state, key_string = string_of_expr state key in
+          let state, value_string = string_of_expr state value in
+          (state, Printf.sprintf "%s %s" key_string value_string) )
+        []
+        state
+        keys_and_vals
+    in
+    (state, Printf.sprintf "{%s}" (String.concat " " keyvalue_strings))
   | TaggedValue (name, _enum, value) ->
-    Printf.sprintf "(%s %s)" name (string_of_expr gensym_env value)
-  | Enum t -> Type.Type.to_string gensym_env t
+    let state, value_string = string_of_expr state value in
+    (state, Printf.sprintf "(%s %s)" name value_string)
+  | Enum t -> Type.string_of_typ state t
   | TypeDef (_pos, args, child_expr) ->
-    "(type ["
-    ^ String.trim (String.concat " " args)
-    ^ "%s"
-    ^ "] "
-    ^ string_of_expr gensym_env child_expr
-    ^ ")"
+    let state, child_expr_string = string_of_expr state child_expr in
+    ( state
+    , "(type ["
+      ^ String.trim (String.concat " " args)
+      ^ "%s"
+      ^ "] "
+      ^ child_expr_string
+      ^ ")" )

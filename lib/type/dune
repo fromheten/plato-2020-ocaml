@@ -1,3 +1,5 @@
 (library
  (name type)
- (libraries util))
+ (libraries util yojson)
+ (preprocess
+  (pps ppx_deriving_yojson)))

@@ -283,7 +283,10 @@ let rec generate (expression : Expr.expr) (state : state ref) : string =
     code :=
       Printf.sprintf
         "makeEnum(\"%s\")"
-        (Type.Type.to_string gensym_state (Type.Type.TyTagUnion (pos, cases)));
+        (snd
+           (Type.string_of_typ
+              (Type.info_of_state gensym_state)
+              (Type.Type.TyTagUnion (pos, cases)) ) );
     !code
   | Enum _ -> failwith "Generate C code for Enum"
   | TypeDef (_, _args, child_expr) -> generate child_expr state

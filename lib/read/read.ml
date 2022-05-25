@@ -577,11 +577,17 @@ let tarrow (typ : source -> Type.Type.typ parseresult) source :
     source
 
 
-let tsym global_env source : Type.Type.typ parseresult =
+let tsym (gensym_state : Type.gensym_state) source : Type.Type.typ parseresult =
   (map (orElse symbol quoted_symbol) (function
       | Ok ((rest, index), Sym (pos, s)) ->
-        let tv = Type.TypeVariable.create global_env in
-        tv.name <- s;
+        let state, tv =
+          Type.typ_variable
+            (gensym_state.next_variable_id, gensym_state.next_variable_name)
+            s
+            None
+        in
+        gensym_state.next_variable_id <- fst state;
+        gensym_state.next_variable_name <- snd state;
         Ok ((rest, index), Type.Type.TyVar (pos, tv))
       | _ -> Error "Not a symbol" ) )
     source
@@ -591,8 +597,8 @@ let tu8 : source -> 'a parseresult =
   map (literal "U8") (Util.take_ok (fun (state, ()) -> (state, Type.tU8)))
 
 
-let rec typ global_env src : Type.Type.typ parseresult =
-  (orElse_list [ tarrow (typ global_env); tunit; tu8; tsym global_env ]) src
+let rec typ gensym_state src : Type.Type.typ parseresult =
+  (orElse_list [ tarrow (typ gensym_state); tunit; tu8; tsym gensym_state ]) src
 
 
 let unit source : Expr.expr parseresult =
@@ -851,94 +857,66 @@ let expression_tests =
                   )
                 ] ) ) )
   ; ( "Advanced K annotation"
-    , expression
-        (Type.new_gensym_state ())
-        (0, Util.char_list "(: (-> X Y X) (λ [x y] x))")
-      = Ok
-          ( (27, [])
-          , Ann
-              ( (0, 27)
-              , Type.Type.TyOp
-                  ( negpos
-                  , "->"
-                  , [ Type.Type.TyVar
-                        ( negpos
-                        , { Type.TypeVariable.id = 0
-                          ; name = "X"
-                          ; instance = None
-                          } )
-                    ; Type.Type.TyOp
-                        ( negpos
-                        , "->"
-                        , [ Type.Type.TyVar
-                              ( negpos
-                              , { Type.TypeVariable.id = 1
-                                ; name = "Y"
-                                ; instance = None
-                                } )
-                          ; Type.Type.TyVar
-                              ( negpos
-                              , { Type.TypeVariable.id = 2
-                                ; name = "X"
-                                ; instance = None
-                                } )
-                          ] )
-                    ] )
-              , Lam
-                  ( (26, 27)
-                  , [ ( PSym ((19, 20), "x")
-                      , Lam
-                          ( (26, 27)
-                          , [ (PSym ((21, 22), "y"), Sym ((24, 25), "x")) ] ) )
-                    ] ) ) ) )
+    , Util.take_ok
+        (fun ((_pos, _rest), expr) -> Expr.string_of_expr (0, 'a') expr)
+        (expression
+           (Type.new_gensym_state ())
+           (0, Util.char_list "(: (-> X Y X) (λ [x y] x))") )
+      = Ok ((0, 'a'), "(: (-> X#-0X (-> Y#-1Y X#-2X)) (λ x (λ y x)))") )
   ; ( "Apply annotated K"
-    , expression
-        (Type.new_gensym_state ())
-        (0, Util.char_list "((: (-> X Y X) (λ [x y] x)) 音 '沈黙')")
-      = Ok
-          ( (41, [])
-          , App
-              ( (0, 41)
-              , App
-                  ( (0, 41)
-                  , Ann
-                      ( (1, 28)
-                      , Type.Type.TyOp
-                          ( negpos
-                          , "->"
-                          , [ Type.Type.TyVar
-                                ( negpos
-                                , { Type.TypeVariable.id = 0
-                                  ; name = "X"
-                                  ; instance = None
-                                  } )
-                            ; Type.Type.TyOp
-                                ( negpos
-                                , "->"
-                                , [ Type.Type.TyVar
-                                      ( negpos
-                                      , { Type.TypeVariable.id = 1
-                                        ; name = "Y"
-                                        ; instance = None
-                                        } )
-                                  ; Type.Type.TyVar
-                                      ( negpos
-                                      , { Type.TypeVariable.id = 2
-                                        ; name = "X"
-                                        ; instance = None
-                                        } )
-                                  ] )
-                            ] )
-                      , Lam
-                          ( (27, 28)
-                          , [ ( PSym ((20, 21), "x")
-                              , Lam
-                                  ( (27, 28)
-                                  , [ (PSym ((22, 23), "y"), Sym ((25, 26), "x"))
-                                    ] ) )
-                            ] ) )
-                  , Sym ((29, 32), "音") )
-              , Sym ((33, 40), "沈黙") ) ) )
+    , Util.take_ok
+        (fun ((_pos, _rest), expr) -> Expr.string_of_expr (0, 'a') expr)
+        (expression
+           (Type.new_gensym_state ())
+           (0, Util.char_list "((: (-> X Y X) (λ [x y] x)) 音 沈黙)") )
+      = Ok ((0, 'a'), "(((: (-> X#-0X (-> Y#-1Y X#-2X)) (λ x (λ y x))) 音) 沈黙)")
+      (* , expression
+       *     (Type.new_gensym_state ())
+       *     (0, Util.char_list "((: (-> X Y X) (λ [x y] x)) 音 '沈黙')")
+       *   = Ok
+       *       ( (41, [])
+       *       , App
+       *           ( (0, 41)
+       *           , App
+       *               ( (0, 41)
+       *               , Ann
+       *                   ( (1, 28)
+       *                   , Type.Type.TyOp
+       *                       ( negpos
+       *                       , "->"
+       *                       , [ Type.Type.TyVar
+       *                             ( negpos
+       *                             , { Type.TypeVariable.id = 0
+       *                               ; name = "X"
+       *                               ; instance = None
+       *                               } )
+       *                         ; Type.Type.TyOp
+       *                             ( negpos
+       *                             , "->"
+       *                             , [ Type.Type.TyVar
+       *                                   ( negpos
+       *                                   , { Type.TypeVariable.id = 1
+       *                                     ; name = "Y"
+       *                                     ; instance = None
+       *                                     } )
+       *                               ; Type.Type.TyVar
+       *                                   ( negpos
+       *                                   , { Type.TypeVariable.id = 2
+       *                                     ; name = "X"
+       *                                     ; instance = None
+       *                                     } )
+       *                               ] )
+       *                         ] )
+       *                   , Lam
+       *                       ( (27, 28)
+       *                       , [ ( PSym ((20, 21), "x")
+       *                           , Lam
+       *                               ( (27, 28)
+       *                               , [ (PSym ((22, 23), "y"), Sym ((25, 26), "x"))
+       *                                 ] ) )
+       *                         ] ) )
+       *               , Sym ((29, 32), "音") )
+       *           , Sym ((33, 40), "沈黙") ) ) *) )
   ; ( "FAILURE?? Nested applications happen in order"
     , application
         (expression (Type.new_gensym_state ()))
@@ -1003,54 +981,30 @@ let expression_tests =
 
 let typ_tests =
   [ ( "Longbow arrows"
-    , typ (Type.new_gensym_state ()) (0, Util.char_list "(-> X Y X)")
-      = Ok
-          ( (10, [])
-          , Type.Type.TyOp
-              ( negpos
-              , "->"
-              , [ Type.Type.TyVar
-                    ( negpos
-                    , { Type.TypeVariable.id = 0; name = "X"; instance = None }
-                    )
-                ; Type.Type.TyOp
-                    ( negpos
-                    , "->"
-                    , [ Type.Type.TyVar
-                          ( negpos
-                          , { Type.TypeVariable.id = 1
-                            ; name = "Y"
-                            ; instance = None
-                            } )
-                      ; Type.Type.TyVar
-                          ( negpos
-                          , { Type.TypeVariable.id = 2
-                            ; name = "X"
-                            ; instance = None
-                            } )
-                      ] )
-                ] ) ) )
+    , Util.take_ok
+        (fun (rest, typ) -> (rest, Type.string_of_typ (0, 'a') typ))
+        (typ (Type.new_gensym_state ()) (0, Util.char_list "(-> X Y X)"))
+      = Ok ((10, []), ((0, 'a'), "(-> X#-0X (-> Y#-1Y X#-2X))")) )
   ]
 
 
 let src_to_src src =
   Util.take_ok
-    (Util.comp (Expr.string_of_expr (Type.new_gensym_state ())) Util.second)
+    (Util.comp (Expr.string_of_expr (0, 'a')) Util.second)
     (expression (Type.new_gensym_state ()) (0, Util.char_list src))
 
 
-let src_to_src_test src = src_to_src src = Ok src
+let src_to_src_test src = src_to_src src = Ok ((0, 'a'), src)
 
 let string_of_expr_tests =
   [ ( "string of quoted symbol"
-    , Expr.string_of_expr
-        (Type.new_gensym_state ())
-        (Sym ((0, 0), " I'm a quoted symbol"))
-      = "\" I'm a quoted symbol\"" )
-  ; ("string of lambda", src_to_src "(λ x (λ y x))" = Ok "(λ x (λ y x))")
+    , Expr.string_of_expr (0, 'a') (Sym ((0, 0), " I'm a quoted symbol"))
+      = ((0, 'a'), "\" I'm a quoted symbol\"") )
+  ; ( "string of lambda"
+    , src_to_src "(λ x (λ y x))" = Ok ((0, 'a'), "(λ x (λ y x))") )
   ; ( "string of app"
     , let src = "(((λ x (λ y x)) \"first\") \"second\")" in
-      src_to_src src = Ok src )
+      src_to_src src = Ok ((0, 'a'), src) )
   ]
 
 

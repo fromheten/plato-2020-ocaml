@@ -10,10 +10,10 @@ clean:
 	rm -rf target/ build/ bdwgc/ libatomic_ops/ c-rrb/ sds/ hash-array-mapped-trie/
 
 libatomic_ops/:
-	git clone git://github.com/ivmai/libatomic_ops.git
+	git clone https://github.com/ivmai/libatomic_ops.git # git://github.com/ivmai/libatomic_ops.git
 
 bdwgc/: libatomic_ops/
-	git clone git://github.com/ivmai/bdwgc.git
+	git clone https://github.com/ivmai/bdwgc.git #git://github.com/ivmai/bdwgc.git
 	ln -s libatomic_ops bdwgc/libatomic_ops
 
 target/include/gc.h: bdwgc/

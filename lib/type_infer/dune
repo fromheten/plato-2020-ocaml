@@ -1,3 +1,8 @@
 (library
  (name type_infer)
- (libraries util expr))
+ (libraries ; util
+
+   type expr state)
+ (preprocess
+  (pps ppx_inline_test ppx_assert))
+)
