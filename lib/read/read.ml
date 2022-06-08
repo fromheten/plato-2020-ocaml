@@ -359,13 +359,6 @@ let vector (expression : source -> Expr.expr parseresult) (source : source) :
     source
 
 
-let vector_tests =
-  [ ( "this is not a vector"
-    , vector symbol (0, Util.char_list "#{ []}#")
-      = Error "Source '#{ []}#' not matching literal '['" )
-  ]
-
-
 let set (expr : source -> Expr.expr parseresult) (source : source) :
     Expr.expr parseresult =
   (map
@@ -533,36 +526,34 @@ let lambda_tests =
   ]
 
 
-let tunit (source : source) : Type.Type.typ parseresult =
+let tunit (source : source) : Hmtype.typ parseresult =
   (map
      (andThen (literal "<") (literal ">"))
      (Util.take_ok (fun ((end_pos, rest), ((), ())) ->
-          ((end_pos, rest), Type.tUnit) ) ) )
+          ((end_pos, rest), Hmtype.tUnit) ) ) )
     source
 
 
 let tunit_tests =
-  [ ("AbsoluT ENHET", tunit (0, [ '<'; '>' ]) = Ok ((2, []), Type.tUnit)) ]
+  [ ("AbsoluT ENHET", tunit (0, [ '<'; '>' ]) = Ok ((2, []), Hmtype.tUnit)) ]
 
 
-let ttuple (typ : source -> Type.Type.typ parseresult) source :
-    Type.Type.typ parseresult =
-  (map
-     (andThen (andThen (literal "<") (n_or_more 1 typ)) (literal ">"))
-     (Util.take_ok (fun ((end_pos, rest), (((), members), ())) ->
-          ((end_pos, rest), Type.tTuple members) ) ) )
-    source
+(* let ttuple (typ : source -> Hmtype.typ parseresult) source :
+ *     Hmtype.typ parseresult =
+ *   (map
+ *      (andThen (andThen (literal "<") (n_or_more 1 typ)) (literal ">"))
+ *      (Util.take_ok (fun ((end_pos, rest), (((), members), ())) ->
+ *           ((end_pos, rest), Type.tTuple members) ) ) )
+ *     source *)
 
+(* let ttuple_tests =
+ *   [ ( "ttuple ttuple ttuple"
+ *     , ttuple tunit (0, Util.char_list "< <>  <> > ]")
+ *       = Ok ((9, [ ' '; ']' ]), Type.tTuple [ Hmtype.tUnit; Hmtype.tUnit ]) )
+ *   ] *)
 
-let ttuple_tests =
-  [ ( "ttuple ttuple ttuple"
-    , ttuple tunit (0, Util.char_list "< <>  <> > ]")
-      = Ok ((9, [ ' '; ']' ]), Type.tTuple [ Type.tUnit; Type.tUnit ]) )
-  ]
-
-
-let tarrow (typ : source -> Type.Type.typ parseresult) source :
-    Type.Type.typ parseresult =
+let tarrow (typ : source -> Hmtype.typ parseresult) source :
+    Hmtype.typ parseresult =
   (map
      (andThen
         (andThen (andThen (literal "(") (literal "->")) (n_or_more 2 typ))
@@ -570,35 +561,28 @@ let tarrow (typ : source -> Type.Type.typ parseresult) source :
      (Util.take_ok (fun ((end_pos, rest), ((((), ()), the_types), ())) ->
           let rec arrowise = function
             | [ t ] -> t
-            | t :: rest -> Type.tArrow t (arrowise rest)
+            | t :: rest -> Hmtype.tArrow t (arrowise rest)
             | [] -> failwith "arrowise should not get empty input"
           in
           ((end_pos, rest), arrowise the_types) ) ) )
     source
 
 
-let tsym (gensym_state : Type.gensym_state) source : Type.Type.typ parseresult =
-  (map (orElse symbol quoted_symbol) (function
-      | Ok ((rest, index), Sym (pos, s)) ->
-        let state, tv =
-          Type.typ_variable
-            (gensym_state.next_variable_id, gensym_state.next_variable_name)
-            s
-            None
-        in
-        gensym_state.next_variable_id <- fst state;
-        gensym_state.next_variable_name <- snd state;
-        Ok ((rest, index), Type.Type.TyVar (pos, tv))
-      | _ -> Error "Not a symbol" ) )
-    source
+let tsym =
+  map (orElse symbol quoted_symbol) (function
+      | Ok (state, Sym (_pos, s)) -> Ok (state, Hmtype.TypeVariable s)
+      | _ -> Error "Not a symbol" )
 
 
-let tu8 : source -> 'a parseresult =
-  map (literal "U8") (Util.take_ok (fun (state, ()) -> (state, Type.tU8)))
+let tu8 : source -> Hmtype.typ parseresult =
+  map
+    (literal "U8")
+    (Util.take_ok (fun (state, ()) ->
+         (state, Hmtype.TypeConstant Hmtype.Integer) ) )
 
 
-let rec typ gensym_state src : Type.Type.typ parseresult =
-  (orElse_list [ tarrow (typ gensym_state); tunit; tu8; tsym gensym_state ]) src
+let rec typ src : Hmtype.typ parseresult =
+  (orElse_list [ tarrow typ; tunit; tu8; tsym ]) src
 
 
 let unit source : Expr.expr parseresult =
@@ -637,13 +621,12 @@ let tuple (expression : source -> Expr.expr parseresult) source :
     source
 
 
-let annotation
-    gensym_state (expression : source -> Expr.expr parseresult) source :
+let annotation (expression : source -> Expr.expr parseresult) source :
     Expr.expr parseresult =
   (map
      (andThen
         (andThen
-           (andThen (andThen (literal "(") (literal ":")) (typ gensym_state))
+           (andThen (andThen (literal "(") (literal ":")) typ)
            expression )
         (literal ")") )
      (Util.take_ok (fun ((end_pos, rest), (((((), ()), t), e), ())) ->
@@ -698,20 +681,20 @@ let dict expression source =
     source
 
 
-let enum_no_arg_case : 'source -> (string * Type.Type.typ) parseresult =
+let enum_no_arg_case : 'source -> (string * Hmtype.typ) parseresult =
   let uppercase_symbol = symbol (* TODO ensure uppercase *) in
   map
     uppercase_symbol
     (Util.take_ok (function
         | (new_pos, rest), Expr.Sym (_, tag_name) ->
-          ((new_pos, rest), (tag_name, Type.tUnit))
+          ((new_pos, rest), (tag_name, Hmtype.tUnit))
         | _ ->
           failwith
             "enum_case can currently only be simply symbols. Come back later..." )
         )
 
 
-let enum_with_arg_case typ : 'source -> (string * Type.Type.typ) parseresult =
+let enum_with_arg_case typ : 'source -> (string * Hmtype.typ) parseresult =
   map
     (andThen (andThen (andThen (literal "(") symbol) typ) (literal ")"))
     (Util.take_ok (function
@@ -720,18 +703,17 @@ let enum_with_arg_case typ : 'source -> (string * Type.Type.typ) parseresult =
         | _ -> failwith "don't know hwo to handle this" ) )
 
 
-let enum typ source =
-  (map
-     (andThen
-        (andThen
-           (andThen (literal "(") (literal "enum"))
-           (n_or_more 1 (orElse enum_no_arg_case (enum_with_arg_case typ))) )
-        (literal ")") )
-     (Util.take_ok (fun ((index, rest), ((((), ()), cases), ())) ->
-          ( (index, rest)
-          , Expr.Enum (Type.Type.TyTagUnion ((fst source, index), cases)) ) ) ) )
-    source
-
+(* let enum typ source =
+ *   (map
+ *      (andThen
+ *         (andThen
+ *            (andThen (literal "(") (literal "enum"))
+ *            (n_or_more 1 (orElse enum_no_arg_case (enum_with_arg_case typ))) )
+ *         (literal ")") )
+ *      (Util.take_ok (fun ((index, rest), ((((), ()), cases), ())) ->
+ *           ( (index, rest)
+ *           , Expr.Enum (Type.Type.TyTagUnion ((fst source, index), cases)) ) ) ) )
+ *     source *)
 
 let match_expr expression source =
   (map
@@ -775,8 +757,7 @@ let type_def expression source =
 
 (* (0, Util.char_list "(type [a b] (: (-> a b a) (λ [x y] x)))") *)
 
-let rec expression gensym_state (source_code : source) : Expr.expr parseresult =
-  let expression = expression gensym_state in
+let rec expression (source_code : source) : Expr.expr parseresult =
   (orElse_list
      [ u8
      ; tuple expression
@@ -789,9 +770,8 @@ let rec expression gensym_state (source_code : source) : Expr.expr parseresult =
      ; set expression
      ; lambda expression
      ; deep_lambda expression
-     ; annotation gensym_state expression
-     ; let_expr expression
-     ; enum (typ gensym_state)
+     ; annotation expression
+     ; let_expr expression (* ; enum (typ gensym_state) *)
      ; type_def expression
        (* ; tagged_expr expression This does not belong here, because the syntax
           is equal to the syntax of App. Since it's syntactically similar but
@@ -811,29 +791,26 @@ let string_of_quoted_symbol s = Util.str [ "\""; s; "\"" ]
 
 let expression_tests =
   [ ( "Why does this symbol not end at the space?"
-    , expression (Type.new_gensym_state ()) (0, Util.char_list "hello#{}#")
+    , expression (0, Util.char_list "hello#{}#")
       = Ok ((5, [ '#'; '{'; '}'; '#' ]), Sym ((0, 5), "hello")) )
   ; ( "Set of stuff"
-    , expression
-        (Type.new_gensym_state ())
-        (0, Util.char_list "#{ hello there}#")
+    , expression (0, Util.char_list "#{ hello there}#")
       = Ok
           ( (16, [])
           , Set ((0, 16), [ Sym ((3, 8), "hello"); Sym ((9, 14), "there") ]) )
     )
   ; ( "Set of vector"
-    , expression (Type.new_gensym_state ()) (0, Util.char_list "#{ []}# ")
+    , expression (0, Util.char_list "#{ []}# ")
       = Ok ((7, [ ' ' ]), Set ((0, 7), [ Vector ((2, 5), []) ])) )
   ; ( "Unit"
-    , expression (Type.new_gensym_state ()) (0, Util.char_list "  <> ")
-      = Ok ((4, [ ' ' ]), Unit (0, 4)) )
+    , expression (0, Util.char_list "  <> ") = Ok ((4, [ ' ' ]), Unit (0, 4)) )
   ; ( "Full tuple"
-    , expression (Type.new_gensym_state ()) (0, Util.char_list "<hello <>> ")
+    , expression (0, Util.char_list "<hello <>> ")
       = Ok
           ( (10, [ ' ' ])
           , Tuple ((0, 10), [ Sym ((1, 6), "hello"); Unit (6, 9) ]) ) )
   ; ( "parse K"
-    , expression (Type.new_gensym_state ()) (0, Util.char_list "(λ x (λ y x))")
+    , expression (0, Util.char_list "(λ x (λ y x))")
       = Ok
           ( (15, [])
           , Lam
@@ -844,10 +821,10 @@ let expression_tests =
                   )
                 ] ) ) )
   ; ( "Annotate Unit"
-    , expression (Type.new_gensym_state ()) (0, Util.char_list "(: <> <>)")
-      = Ok ((9, []), Ann ((0, 9), Type.tUnit, Unit (5, 8))) )
+    , expression (0, Util.char_list "(: <> <>)")
+      = Ok ((9, []), Ann ((0, 9), Hmtype.tUnit, Unit (5, 8))) )
   ; ( "Deep λ"
-    , expression (Type.new_gensym_state ()) (0, Util.char_list "(λ [x y] x)")
+    , expression (0, Util.char_list "(λ [x y] x)")
       = Ok
           ( (12, [])
           , Lam
@@ -859,19 +836,15 @@ let expression_tests =
   ; ( "Advanced K annotation"
     , Util.take_ok
         (fun ((_pos, _rest), expr) -> Expr.string_of_expr (0, 'a') expr)
-        (expression
-           (Type.new_gensym_state ())
-           (0, Util.char_list "(: (-> X Y X) (λ [x y] x))") )
-      = Ok ((0, 'a'), "(: (-> X#-0X (-> Y#-1Y X#-2X)) (λ x (λ y x)))") )
+        (expression (0, Util.char_list "(: (-> X Y X) (λ [x y] x))"))
+      = Ok ((0, 'a'), "(: (-> X (-> Y X)) (λ x (λ y x)))") )
   ; ( "Apply annotated K"
     , Util.take_ok
         (fun ((_pos, _rest), expr) -> Expr.string_of_expr (0, 'a') expr)
-        (expression
-           (Type.new_gensym_state ())
-           (0, Util.char_list "((: (-> X Y X) (λ [x y] x)) 音 沈黙)") )
-      = Ok ((0, 'a'), "(((: (-> X#-0X (-> Y#-1Y X#-2X)) (λ x (λ y x))) 音) 沈黙)")
+        (expression (0, Util.char_list "((: (-> X Y X) (λ [x y] x)) 音 沈黙)"))
+      = Ok ((0, 'a'), "(((: (-> X (-> Y X)) (λ x (λ y x))) 音) 沈黙)")
       (* , expression
-       *     (Type.new_gensym_state ())
+       *
        *     (0, Util.char_list "((: (-> X Y X) (λ [x y] x)) 音 '沈黙')")
        *   = Ok
        *       ( (41, [])
@@ -918,9 +891,7 @@ let expression_tests =
        *               , Sym ((29, 32), "音") )
        *           , Sym ((33, 40), "沈黙") ) ) *) )
   ; ( "FAILURE?? Nested applications happen in order"
-    , application
-        (expression (Type.new_gensym_state ()))
-        (0, Util.char_list "(x (y z) (a b) c)")
+    , application expression (0, Util.char_list "(x (y z) (a b) c)")
       = Ok
           ( (17, [])
           , App
@@ -935,12 +906,10 @@ let expression_tests =
                   , App ((8, 14), Sym ((10, 11), "a"), Sym ((12, 13), "b")) )
               , Sym ((15, 16), "c") ) ) )
   ; ( "Strings are parsed as expressions"
-    , expression (Type.new_gensym_state ()) (0, Util.char_list "  \"Hello\"  ")
+    , expression (0, Util.char_list "  \"Hello\"  ")
       = Ok ((7, [ ' '; ' ' ]), String ((2, 7), "Hello")) )
   ; ( "Application and typ vars"
-    , expression
-        (Type.new_gensym_state ())
-        (0, Util.char_list "((λ x (λ y x)) \"first\" \"second\")")
+    , expression (0, Util.char_list "((λ x (λ y x)) \"first\" \"second\")")
       = Ok
           ( (30, [])
           , App
@@ -958,13 +927,11 @@ let expression_tests =
                   , String ((17, 22), "first") )
               , String ((23, 29), "second") ) ) )
   ; ( "parse u8"
-    , expression (Type.new_gensym_state ()) (0, Util.char_list "  (u8 1337)")
+    , expression (0, Util.char_list "  (u8 1337)")
       = Ok ((11, []), U8 ((6, 10), 1337)) )
   ; ( "You know what they say about men with large vocabularies? They also \
        have a large Dict"
-    , dict
-        (expression (Type.new_gensym_state ()))
-        (0, Util.char_list "{\"ichi\" 1 \"ni\" 2 \"san\" 3}")
+    , dict expression (0, Util.char_list "{\"ichi\" 1 \"ni\" 2 \"san\" 3}")
       = Ok
           ( (19, [])
           , Dict
@@ -974,24 +941,53 @@ let expression_tests =
                 ; (String ((13, 16), "san"), Sym ((17, 18), "3"))
                 ] ) ) )
     (* ;("Parse universal types"
-     *  , expression (Type.new_gensym_state ()) (0, Util.char_list "(type [a b] (: (-> a b a)) (λ [x y] x))")
+     *  , expression  (0, Util.char_list "(type [a b] (: (-> a b a)) (λ [x y] x))")
      * ) *)
+  ]
+
+
+let vector_tests =
+  [ ( "this is a vector"
+    , expression (0, Util.char_list "[\"Hello\" \"There\"]")
+      = Ok
+          ( (13, [])
+          , Expr.Vector
+              ( (0, 13)
+              , [ Expr.String ((1, 6), "Hello")
+                ; Expr.String ((7, 12), "There")
+                ] ) ) )
+  ; ( "vector or vector"
+    , expression (0, Util.char_list "[[\"hello\"] [\"there\" \"friend\"]]")
+      = Ok
+          ( (24, [])
+          , Expr.Vector
+              ( (0, 24)
+              , [ Expr.Vector ((1, 8), [ Expr.String ((2, 7), "hello") ])
+                ; Expr.Vector
+                    ( (8, 23)
+                    , [ Expr.String ((10, 15), "there")
+                      ; Expr.String ((16, 22), "friend")
+                      ] )
+                ] ) ) )
+  ; ( "this is not a vector"
+    , vector expression (0, Util.char_list "#{ []}#")
+      = Error "Source '#{ []}#' not matching literal '['" )
   ]
 
 
 let typ_tests =
   [ ( "Longbow arrows"
     , Util.take_ok
-        (fun (rest, typ) -> (rest, Type.string_of_typ (0, 'a') typ))
-        (typ (Type.new_gensym_state ()) (0, Util.char_list "(-> X Y X)"))
-      = Ok ((10, []), ((0, 'a'), "(-> X#-0X (-> Y#-1Y X#-2X))")) )
+        (fun (rest, typ) -> (rest, Hmtype.string_of_typ typ))
+        (typ (0, Util.char_list "(-> X Y X)"))
+      = Ok ((10, []), "(-> X (-> Y X))") )
   ]
 
 
 let src_to_src src =
   Util.take_ok
     (Util.comp (Expr.string_of_expr (0, 'a')) Util.second)
-    (expression (Type.new_gensym_state ()) (0, Util.char_list src))
+    (expression (0, Util.char_list src))
 
 
 let src_to_src_test src = src_to_src src = Ok ((0, 'a'), src)

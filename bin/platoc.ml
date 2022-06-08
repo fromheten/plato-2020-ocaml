@@ -2,14 +2,13 @@
 let negpos = (-1, -1)
 
 let compile (src : string) : (string, string) result =
-  let gensym_env = Type.new_gensym_state () in
-  match Read.expression gensym_env (0, Util.char_list src) with
+  match Read.expression (0, Util.char_list src) with
   | Ok (_rest, expr) ->
-    Printf.printf "\nExpr:\n%s\n" (snd (Expr.string_of_expr (0, 'a') expr));
-    let type_result = Ok (Hmport.infer [] expr) in
+    Printf.printf "\nExpr: %s\n" (snd (Expr.string_of_expr (0, 'a') expr));
+    let type_result = Ok (Expr.infer [] expr) in
     ( match type_result with
     | Ok typ ->
-      Printf.printf "%s" (Hmport.string_of_typ typ);
+      Printf.printf "Type: %s" (Hmtype.string_of_typ typ);
       Ok (Codegen.generate_program expr)
     | Error e -> failwith e )
   | Error e -> Error (Util.str [ "`Platoc.compile` Error: e: "; e ])

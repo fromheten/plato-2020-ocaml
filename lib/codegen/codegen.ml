@@ -251,7 +251,7 @@ let rec generate (expression : Expr.expr) (state : state ref) : string =
              (generate child state) )
       | [] -> acc
     in
-    code := "makeVector(" ^ fill_vector children "rrb_create()" ^ ")";
+    code := "makeVector(" ^ fill_vector (List.rev children) "rrb_create()" ^ ")";
     !code
   | Dict (_, keys_values) ->
     let rec fill_dict keys_values acc =
@@ -278,16 +278,16 @@ let rec generate (expression : Expr.expr) (state : state ref) : string =
     (* Doesn't have to be compiled statically in any way - just make a type of
        value *)
     failwith "Generate C code for TaggedValue"
-  | Enum (TyTagUnion (pos, cases)) ->
-    let gensym_state = Type.new_gensym_state () in
-    code :=
-      Printf.sprintf
-        "makeEnum(\"%s\")"
-        (snd
-           (Type.string_of_typ
-              (Type.info_of_state gensym_state)
-              (Type.Type.TyTagUnion (pos, cases)) ) );
-    !code
+  (* | Enum (TyTagUnion (pos, cases)) ->
+   *   let gensym_state = Type.new_gensym_state () in
+   *   code :=
+   *     Printf.sprintf
+   *       "makeEnum(\"%s\")"
+   *       (snd
+   *          (Type.string_of_typ
+   *             (Type.info_of_state gensym_state)
+   *             (Type.Type.TyTagUnion (pos, cases)) ) );
+   *   !code *)
   | Enum _ -> failwith "Generate C code for Enum"
   | TypeDef (_, _args, child_expr) -> generate child_expr state
 

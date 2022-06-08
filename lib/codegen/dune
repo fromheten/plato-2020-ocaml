@@ -1,5 +1,5 @@
 (library
  (name codegen)
- (libraries util yojson ppx_deriving_yojson.runtime expr type_infer type)
+ (libraries util yojson ppx_deriving_yojson.runtime expr hmtype)
  (preprocess
   (pps ppx_deriving_yojson)))

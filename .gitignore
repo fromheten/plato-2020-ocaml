@@ -11,3 +11,5 @@ out/*
 *.diff.md
 *.md.corrected
 docs/
+*.~undo-tree~
+*.nrepl-port

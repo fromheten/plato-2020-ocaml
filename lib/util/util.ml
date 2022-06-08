@@ -143,3 +143,9 @@ let string_of_pos pos =
   match pos with
   | start, finish ->
     Printf.sprintf "(pos %s, %s)" (string_of_int start) (string_of_int finish)
+
+
+let unwrap res to_string =
+  match res with
+  | Ok x -> x
+  | Error e -> failwith (to_string e)

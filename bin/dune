@@ -4,9 +4,6 @@
   expr
   read
   util
-  type
-  type_infer
-  hmport
-  ; unify
+  hmtype
   codegen
   cryptokit))
