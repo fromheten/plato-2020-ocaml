@@ -214,7 +214,7 @@ let rec infer_type (env : Hmtype.typ_env) (exp : expr) :
     failwith "A bunch of type inferrence things not done"
   | Ann (_, t, e) ->
     let _env, e_type = infer_type env e in
-    ( match Hmtype.unify_res t e_type with
+    ( match Hmtype.unify t e_type with
     | Ok env -> (env, e_type)
     | Error unify_err ->
       failwith
@@ -276,7 +276,7 @@ let rec infer_type (env : Hmtype.typ_env) (exp : expr) :
       infer_type (Hmtype.replace_substitutions_env substs1 env) arg
     in
     ( match
-        Hmtype.unify_res
+        Hmtype.unify
           (Hmtype.replace_substitutions substs2 fun_t)
           (TypeApp [ TypeConstant Arrow; arg_t; res_t ])
       with
@@ -291,7 +291,7 @@ let rec infer_type (env : Hmtype.typ_env) (exp : expr) :
       let var_tv = Hmtype.gen_type_variable var in
       let new_env = (var, var_tv) :: env in
       let s1, t1 = infer_type new_env value in
-      match Hmtype.unify_res var_tv t1 with
+      match Hmtype.unify var_tv t1 with
       | Ok s1' ->
         let s2, t2 =
           infer_type

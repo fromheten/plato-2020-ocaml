@@ -220,7 +220,7 @@ let string_of_unify_err = function
     ^ string_of_typ t2
 
 
-let rec unify_res (t1 : typ) (t2 : typ) : (typ_env, unify_err) result =
+let rec unify (t1 : typ) (t2 : typ) : (typ_env, unify_err) result =
   if t1 = t2
   then Ok []
   else
@@ -238,7 +238,7 @@ let rec unify_res (t1 : typ) (t2 : typ) : (typ_env, unify_err) result =
                let t2 : typ = t2 in
                let substitutions2 =
                  Util.unwrap (* TODO remove this *)
-                   (unify_res
+                   (unify
                       (replace_substitutions substitutions t1)
                       (replace_substitutions substitutions t2) )
                    string_of_unify_err
@@ -255,7 +255,7 @@ let rec unify_res (t1 : typ) (t2 : typ) : (typ_env, unify_err) result =
     | TypeApp [], (TypeConstant _ | TypeApp _ | TypeScheme (_, _)) ->
       Error (NotUnifyable (t1, t2))
     | TypeConstant (Vector t1_child), TypeConstant (Vector t2_child) ->
-      unify_res t1_child t2_child
+      unify t1_child t2_child
     | _ -> Error (NotUnifyable (t1, t2))
 
 
@@ -266,11 +266,11 @@ let rec unify_many
   | [] when List.length errs_acc = 0 -> Ok env_acc
   | [] -> Error errs_acc
   | [ t0; t1 ] ->
-    ( match unify_res t0 t1 with
+    ( match unify t0 t1 with
     | Ok env -> unify_many [] (List.concat [ env; env_acc ]) errs_acc
     | Error e -> unify_many [] env_acc (e :: errs_acc) )
   | t0 :: t1 :: rest ->
-    ( match unify_res t0 t1 with
+    ( match unify t0 t1 with
     | Ok env -> unify_many (t1 :: rest) (List.concat [ env; env_acc ]) errs_acc
     | Error e -> unify_many (t1 :: rest) env_acc (e :: errs_acc) )
   | [ t ] -> unify_many [ t; gen_type_variable "" ] env_acc errs_acc
