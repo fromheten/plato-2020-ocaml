@@ -20,16 +20,9 @@ type expr =
   | Set of position * expr list
   | Dict of position * (expr * expr) list
   | Ann of position * Hmtype.typ * expr (* Annotation *)
-  | Match of position * expr * (expr pattern * expr) list
   (* Let *)
   | Let of position * string * expr * expr
   | Letrec of position * string * expr * expr
-  (* Enum *)
-  | TaggedValue of string * Hmtype.typ * expr (* tag, enum, tagged value *)
-  | Enum of Hmtype.typ
-  (* invariant: must be TyTagUnion, therefore doesnt need a pos *)
-  (* Forall, Λ *)
-  | TypeDef of position * string list * expr
 
 let is_symbol_char c =
   not
@@ -100,21 +93,6 @@ let rec string_of_expr (state : 'state) : expr -> 'state * string = function
     let state, e0_string = string_of_expr state e0 in
     let state, e1_string = string_of_expr state e1 in
     (state, "(" ^ e0_string ^ " " ^ e1_string ^ ")")
-  | Match (_pos, x, cases) ->
-    let state, x_string = string_of_expr state x in
-    let state, cases_strings =
-      State.map
-        (fun state (pattern, expr) ->
-          let state, pattern_string =
-            string_of_pattern_pure state string_of_expr pattern
-          in
-          let state, expr_string = string_of_expr state expr in
-          (state, " " ^ pattern_string ^ " " ^ expr_string) )
-        []
-        state
-        cases
-    in
-    (state, "(match " ^ x_string ^ String.concat "" cases_strings ^ ")")
   | String (_pos, s) -> (state, "\"" ^ s ^ "\"")
   | Tuple (_pos, exprs) ->
     let state, exprs_strings =
@@ -148,19 +126,6 @@ let rec string_of_expr (state : 'state) : expr -> 'state * string = function
         keys_and_vals
     in
     (state, Printf.sprintf "{%s}" (String.concat " " keyvalue_strings))
-  | TaggedValue (name, _enum, value) ->
-    let state, value_string = string_of_expr state value in
-    (state, Printf.sprintf "(%s %s)" name value_string)
-  | Enum t -> (state, Hmtype.string_of_typ t)
-  | TypeDef (_pos, args, child_expr) ->
-    let state, child_expr_string = string_of_expr state child_expr in
-    ( state
-    , "(type ["
-      ^ String.trim (String.concat " " args)
-      ^ "%s"
-      ^ "] "
-      ^ child_expr_string
-      ^ ")" )
 
 
 module VarSet = Set.Make (String)
@@ -188,23 +153,14 @@ let rec free_vars (expr : expr) =
   | Set (_, _)
   | Dict (_, _)
   | Ann (_, _, _)
-  | Match (_, _, _)
-  | Letrec (_, _, _, _)
-  | TaggedValue (_, _, _)
-  | Enum _
-  | TypeDef (_, _, _) ->
+  | Letrec (_, _, _, _) ->
     failwith "Haven't implemented free_vars of fancy expressions"
 
 
 let rec infer_type (env : Hmtype.typ_env) (exp : expr) :
     Hmtype.typ_env * Hmtype.typ =
   match exp with
-  | Match (_, _, _)
-  | Letrec (_, _, _, _)
-  | TaggedValue (_, _, _)
-  | Enum _
-  | TypeDef (_, _, _) ->
-    failwith "A bunch of type inferrence things not done"
+  | Letrec (_, _, _, _) -> failwith "A bunch of type inferrence things not done"
   | Ann (_, t, e) ->
     let _env, e_type = infer_type env e in
     ( match Hmtype.unify t e_type with

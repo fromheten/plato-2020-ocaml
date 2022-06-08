@@ -146,17 +146,6 @@ let generate_lambda generate lam_arg lam_body state =
   | None -> final_string
 
 
-let generate_match generate state x = function
-  | (Expr.PSym (pos, sym), expr) :: _rest ->
-    let the_app =
-      Expr.App (pos, Expr.Lam (pos, [ (Expr.PSym (pos, sym), expr) ]), x)
-    in
-    generate the_app state
-  | (PTag (_pos, _tag, _x), _expr) :: _rest ->
-    failwith "TODO Tagged unions codegen not done yet"
-  | [] -> failwith "Match with no cases - makes no sense"
-
-
 exception GenerateError of string
 
 let rec generate (expression : Expr.expr) (state : state ref) : string =
@@ -204,14 +193,6 @@ let rec generate (expression : Expr.expr) (state : state ref) : string =
   | App (_, Sym (_, my_symbol), expr_to_convert) when my_symbol = "string" ->
     code := Util.str [ !code; "toString("; generate expr_to_convert state; ")" ];
     !code
-  | App (pos, Enum enum_typ, Sym (sym_pos, tag)) ->
-    generate
-      (Lam
-         ( pos
-         , [ ( PSym (sym_pos, "tagged_value")
-             , TaggedValue (tag, enum_typ, Sym (sym_pos, "tagged_value")) )
-           ] ) )
-      state
   | App (_pos, App (_, Sym _, Sym (_, tag)), value) ->
     Printf.sprintf
       "makeTaggedValue(\"%s\", (struct value*)mallocValue(%s))"
@@ -270,26 +251,6 @@ let rec generate (expression : Expr.expr) (state : state ref) : string =
     !code
   | Set (_, _) -> failwith "TODO codegen of set not yet implemented"
   | Ann (_, _, expression) -> generate expression state
-  | Match (_, x, cases) ->
-    let generate_match = generate_match generate state in
-    generate_match x cases
-  | TaggedValue (_name, _enum, _value) ->
-    (* TaggedValue and Enum can really be just runtime values you pass around *)
-    (* Doesn't have to be compiled statically in any way - just make a type of
-       value *)
-    failwith "Generate C code for TaggedValue"
-  (* | Enum (TyTagUnion (pos, cases)) ->
-   *   let gensym_state = Type.new_gensym_state () in
-   *   code :=
-   *     Printf.sprintf
-   *       "makeEnum(\"%s\")"
-   *       (snd
-   *          (Type.string_of_typ
-   *             (Type.info_of_state gensym_state)
-   *             (Type.Type.TyTagUnion (pos, cases)) ) );
-   *   !code *)
-  | Enum _ -> failwith "Generate C code for Enum"
-  | TypeDef (_, _args, child_expr) -> generate child_expr state
 
 
 let generate_program expression =

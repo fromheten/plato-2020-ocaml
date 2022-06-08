@@ -1,28 +1,3 @@
-(* type 'expr lambda = string * 'expr
- *
- * type atom =
- *   | Number of int
- *   | Bool of bool
- *
- * let string_of_atom = function
- *   | Number n -> string_of_int n
- *   | Bool b -> string_of_bool b
- *
- *
- * type expr =
- *   | App of expr * expr
- *   | Var of string
- *   | Lam of expr lambda
- *   | Let of string * expr * expr
- *   | Atom of atom
- *
- * let string_of_expr = function
- *   | App (_, _) -> "App"
- *   | Var s -> s
- *   | Lam (_x, _body) -> "Lam"
- *   | Let (_, _, _) -> "Let"
- *   | Atom a -> string_of_atom a *)
-
 let union = List.append
 
 let disj list x =

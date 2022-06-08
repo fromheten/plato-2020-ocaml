@@ -681,81 +681,10 @@ let dict expression source =
     source
 
 
-let enum_no_arg_case : 'source -> (string * Hmtype.typ) parseresult =
-  let uppercase_symbol = symbol (* TODO ensure uppercase *) in
-  map
-    uppercase_symbol
-    (Util.take_ok (function
-        | (new_pos, rest), Expr.Sym (_, tag_name) ->
-          ((new_pos, rest), (tag_name, Hmtype.tUnit))
-        | _ ->
-          failwith
-            "enum_case can currently only be simply symbols. Come back later..." )
-        )
-
-
-let enum_with_arg_case typ : 'source -> (string * Hmtype.typ) parseresult =
-  map
-    (andThen (andThen (andThen (literal "(") symbol) typ) (literal ")"))
-    (Util.take_ok (function
-        | (new_pos, rest), ((((), Expr.Sym (_, tag_name)), child_typ), ()) ->
-          ((new_pos, rest), (tag_name, child_typ))
-        | _ -> failwith "don't know hwo to handle this" ) )
-
-
-(* let enum typ source =
- *   (map
- *      (andThen
- *         (andThen
- *            (andThen (literal "(") (literal "enum"))
- *            (n_or_more 1 (orElse enum_no_arg_case (enum_with_arg_case typ))) )
- *         (literal ")") )
- *      (Util.take_ok (fun ((index, rest), ((((), ()), cases), ())) ->
- *           ( (index, rest)
- *           , Expr.Enum (Type.Type.TyTagUnion ((fst source, index), cases)) ) ) ) )
- *     source *)
-
-let match_expr expression source =
-  (map
-     (andThen
-        (andThen
-           (andThen (andThen (literal "(") (literal "match")) expression)
-           (n_or_more 1 (andThen (pattern expression) expression)) )
-        (literal ")") )
-     (Util.take_ok
-        (fun ((pos, rest), (((((), ()), expr), expr_pattern_expr_list), ())) ->
-          ( (pos, rest)
-          , Expr.Match ((fst source, pos), expr, expr_pattern_expr_list) ) ) ) )
-    source
-
-
 let string_of_sym = function
   | Expr.Sym (_pos, s) -> Some s
   | _ -> None
 
-
-let type_def expression source =
-  (map
-     (andThen
-        (andThen
-           (andThen
-              (andThen (literal "(") (literal "type"))
-              (vector expression) )
-           expression )
-        (literal ")") )
-     (Util.take_ok (function
-         | ( new_state
-           , (((((), ()), Expr.Vector (_vec_pos, args)), child_expr), ()) ) ->
-           ( match Util.all_some (List.map string_of_sym args) with
-           | Some args ->
-             ( new_state
-             , Expr.TypeDef ((fst source, fst new_state), args, child_expr) )
-           | None -> failwith "NOt all args to TypeDef are symbols" )
-         | _ -> failwith "Need a vector in TypeDef" ) ) )
-    source
-
-
-(* (0, Util.char_list "(type [a b] (: (-> a b a) (λ [x y] x)))") *)
 
 let rec expression (source_code : source) : Expr.expr parseresult =
   (orElse_list
@@ -771,13 +700,7 @@ let rec expression (source_code : source) : Expr.expr parseresult =
      ; lambda expression
      ; deep_lambda expression
      ; annotation expression
-     ; let_expr expression (* ; enum (typ gensym_state) *)
-     ; type_def expression
-       (* ; tagged_expr expression This does not belong here, because the syntax
-          is equal to the syntax of App. Since it's syntactically similar but
-          only semantically different (depending on the type of e0), the
-          distinction between App and TaggedValue is semantic, not syntactic *)
-     ; match_expr expression
+     ; let_expr expression
      ; application expression
      ] )
     source_code
