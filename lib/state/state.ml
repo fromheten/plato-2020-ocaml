@@ -9,7 +9,7 @@ let rec map f acc state = function
   | x :: xs ->
     let state, result = f state x in
     map f (List.cons result acc) state xs
-  | [] -> (state, acc)
+  | [] -> (state, List.rev acc)
 
 
 let rec exists f state = function
