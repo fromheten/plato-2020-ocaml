@@ -58,13 +58,6 @@ let string_of_sym (s : string) : string =
   else s
 
 
-(* TODO This depends on string_of_value being stateful *)
-let string_of_pattern string_of_value : expr pattern -> string = function
-  | PSym (_pos, s) -> string_of_sym s
-  | PTag (_pos, tag, value) ->
-    "(" ^ string_of_sym tag ^ " " ^ string_of_value value ^ ")"
-
-
 let string_of_pattern_pure state string_of_value = function
   | PSym (_pos, s) -> (state, string_of_sym s)
   | PTag (_pos, tag, value) ->
