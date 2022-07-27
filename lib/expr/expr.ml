@@ -53,13 +53,6 @@ let string_of_sym (s : string) : string =
   else s
 
 
-let string_of_pattern_pure state string_of_value = function
-  | PSym (_pos, s) -> (state, string_of_sym s)
-  | PTag (_pos, tag, value) ->
-    let value_string = string_of_value state value in
-    (state, "(" ^ string_of_sym tag ^ " " ^ value_string ^ ")")
-
-
 let rec string_of_expr : expr -> string = function
   | Let (_pos, name, definition, body) ->
     let definition_string = string_of_expr definition in
