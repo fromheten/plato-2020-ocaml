@@ -581,8 +581,22 @@ let tu8 : source -> Hmtype.typ parseresult =
          (state, Hmtype.TypeConstant Hmtype.Integer) ) )
 
 
+let tstring : source -> Hmtype.typ parseresult =
+  map
+    (literal "String")
+    (Util.take_ok (fun (state, ()) ->
+         (state, Hmtype.TypeConstant Hmtype.String) ) )
+
+
+let tbool : source -> Hmtype.typ parseresult =
+  map
+    (literal "Bool")
+    (Util.take_ok (fun (state, ()) ->
+         (state, Hmtype.TypeConstant Hmtype.Boolean) ) )
+
+
 let rec typ src : Hmtype.typ parseresult =
-  (orElse_list [ tarrow typ; tunit; tu8; tsym ]) src
+  (orElse_list [ tarrow typ; tunit; tstring; tbool; tu8; tsym ]) src
 
 
 let unit source : Expr.expr parseresult =
@@ -686,9 +700,64 @@ let string_of_sym = function
   | _ -> None
 
 
+let if_then_else expression =
+  andThen
+    (andThen
+       (andThen
+          (andThen (andThen (literal "(") (literal "if")) expression)
+          expression )
+       expression )
+    (literal ")")
+
+
+let handle_if_then_else expression source =
+  map
+    (if_then_else expression)
+    (Util.take_ok
+       (fun ((end_pos, rest), ((((((), ()), cond_e), then_e), else_e), ())) ->
+         ( (end_pos, rest)
+         , Expr.IfThenElse ((0, end_pos), cond_e, then_e, else_e) ) ) )
+    source
+
+
+let true_ source =
+  map
+    (literal "True")
+    (Util.take_ok (fun ((pos, rest), ()) ->
+         ((pos, rest), Expr.Bool ((fst source, pos), true)) ) )
+    source
+
+
+let false_ source =
+  map
+    (literal "False")
+    (Util.take_ok (fun ((pos, rest), ()) ->
+         ((pos, rest), Expr.Bool ((fst source, pos), false)) ) )
+    source
+
+
+let boolean = orElse true_ false_
+
+let if_then_else expression source =
+  map
+    (andThen
+       (andThen
+          (andThen
+             (andThen (andThen (literal "(") (literal "if")) expression)
+             expression )
+          expression )
+       (literal ")") )
+    (Util.take_ok
+       (fun ((pos, rest), ((((((), ()), cond), then_), else_), ())) ->
+         ((pos, rest), Expr.IfThenElse ((fst source, pos), cond, then_, else_)) )
+    )
+    source
+
+
 let rec expression (source_code : source) : Expr.expr parseresult =
   (orElse_list
-     [ u8
+     [ boolean
+     ; u8
      ; tuple expression
      ; unit
      ; string
@@ -701,6 +770,7 @@ let rec expression (source_code : source) : Expr.expr parseresult =
      ; deep_lambda expression
      ; annotation expression
      ; let_expr expression
+     ; handle_if_then_else expression
      ; application expression
      ] )
     source_code
@@ -758,14 +828,14 @@ let expression_tests =
                 ] ) ) )
   ; ( "Advanced K annotation"
     , Util.take_ok
-        (fun ((_pos, _rest), expr) -> Expr.string_of_expr (0, 'a') expr)
+        (fun (_, expression) -> Expr.string_of_expr expression)
         (expression (0, Util.char_list "(: (-> X Y X) (λ [x y] x))"))
-      = Ok ((0, 'a'), "(: (-> X (-> Y X)) (λ x (λ y x)))") )
+      = Ok "(: (-> X (-> Y X)) (λ x (λ y x)))" )
   ; ( "Apply annotated K"
     , Util.take_ok
-        (fun ((_pos, _rest), expr) -> Expr.string_of_expr (0, 'a') expr)
+        (fun ((_pos, _rest), expr) -> Expr.string_of_expr expr)
         (expression (0, Util.char_list "((: (-> X Y X) (λ [x y] x)) 音 沈黙)"))
-      = Ok ((0, 'a'), "(((: (-> X (-> Y X)) (λ x (λ y x))) 音) 沈黙)")
+      = Ok "(((: (-> X (-> Y X)) (λ x (λ y x))) 音) 沈黙)"
       (* , expression
        *
        *     (0, Util.char_list "((: (-> X Y X) (λ [x y] x)) 音 '沈黙')")
@@ -909,21 +979,20 @@ let typ_tests =
 
 let src_to_src src =
   Util.take_ok
-    (Util.comp (Expr.string_of_expr (0, 'a')) Util.second)
+    (Util.comp Expr.string_of_expr Util.second)
     (expression (0, Util.char_list src))
 
 
-let src_to_src_test src = src_to_src src = Ok ((0, 'a'), src)
+let src_to_src_test src = src_to_src src = Ok src
 
 let string_of_expr_tests =
   [ ( "string of quoted symbol"
-    , Expr.string_of_expr (0, 'a') (Sym ((0, 0), " I'm a quoted symbol"))
-      = ((0, 'a'), "\" I'm a quoted symbol\"") )
-  ; ( "string of lambda"
-    , src_to_src "(λ x (λ y x))" = Ok ((0, 'a'), "(λ x (λ y x))") )
+    , Expr.string_of_expr (Sym ((0, 0), " I'm a quoted symbol"))
+      = "\" I'm a quoted symbol\"" )
+  ; ("string of lambda", src_to_src "(λ x (λ y x))" = Ok "(λ x (λ y x))")
   ; ( "string of app"
     , let src = "(((λ x (λ y x)) \"first\") \"second\")" in
-      src_to_src src = Ok ((0, 'a'), src) )
+      src_to_src src = Ok src )
   ]
 
 

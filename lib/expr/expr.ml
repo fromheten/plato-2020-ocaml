@@ -23,6 +23,8 @@ type expr =
   (* Let *)
   | Let of position * string * expr * expr
   | Letrec of position * string * expr * expr
+  | IfThenElse of position * expr * expr * expr
+  | Bool of position * bool
 
 let is_symbol_char c =
   not
@@ -54,78 +56,72 @@ let string_of_sym (s : string) : string =
 let string_of_pattern_pure state string_of_value = function
   | PSym (_pos, s) -> (state, string_of_sym s)
   | PTag (_pos, tag, value) ->
-    let state, value_string = string_of_value state value in
+    let value_string = string_of_value state value in
     (state, "(" ^ string_of_sym tag ^ " " ^ value_string ^ ")")
 
 
-let rec string_of_expr (state : 'state) : expr -> 'state * string = function
+let rec string_of_expr : expr -> string = function
   | Let (_pos, name, definition, body) ->
-    let state, definition_string = string_of_expr state definition in
-    let state, body_string = string_of_expr state body in
-    ( state
-    , Printf.sprintf "(let %s %s\n  %s)" name definition_string body_string )
+    let definition_string = string_of_expr definition in
+    let body_string = string_of_expr body in
+    Printf.sprintf "(let %s %s\n  %s)" name definition_string body_string
   | Letrec (_pos, name, definition, body) ->
-    let state, definition_string = string_of_expr state definition in
-    let state, body_string = string_of_expr state body in
-    ( state
-    , Printf.sprintf "(letrec %s %s\n  %s)" name definition_string body_string
-    )
-  | U8 (_pos, i) -> (state, "(u8 " ^ string_of_int i ^ ")")
-  | Sym (_pos, s) -> (state, string_of_sym s)
+    let definition_string = string_of_expr definition in
+    let body_string = string_of_expr body in
+    Printf.sprintf "(letrec %s %s\n  %s)" name definition_string body_string
+  | U8 (_pos, i) -> "(u8 " ^ string_of_int i ^ ")"
+  | Sym (_pos, s) -> string_of_sym s
   | Lam (_pos, patterns_exprs) ->
-    let state, strings =
-      State.map
-        (fun state -> function
+    let strings =
+      List.map
+        (function
           | PTag (_ptag_pos, name, child), expr ->
-            let state, child_string = string_of_expr state child in
-            let state, expr_string = string_of_expr state expr in
-            (state, "( " ^ name ^ " " ^ child_string ^ ") " ^ expr_string)
+            let child_string = string_of_expr child in
+            let expr_string = string_of_expr expr in
+            "( " ^ name ^ " " ^ child_string ^ ") " ^ expr_string
           | PSym (_psym_pos, x), expr ->
-            let state, x_string = string_of_expr state (Sym (_psym_pos, x)) in
-            let state, expr_string = string_of_expr state expr in
-            (state, x_string ^ " " ^ expr_string) )
-        []
-        state
+            let x_string = string_of_expr (Sym (_psym_pos, x)) in
+            let expr_string = string_of_expr expr in
+            x_string ^ " " ^ expr_string )
         patterns_exprs
     in
-    (state, "(λ " ^ String.concat "" strings ^ ")")
+    "(λ " ^ String.concat "" strings ^ ")"
   | App (_pos, e0, e1) ->
-    let state, e0_string = string_of_expr state e0 in
-    let state, e1_string = string_of_expr state e1 in
-    (state, "(" ^ e0_string ^ " " ^ e1_string ^ ")")
-  | String (_pos, s) -> (state, "\"" ^ s ^ "\"")
+    let e0_string = string_of_expr e0 in
+    let e1_string = string_of_expr e1 in
+    "(" ^ e0_string ^ " " ^ e1_string ^ ")"
+  | String (_pos, s) -> "\"" ^ s ^ "\""
   | Tuple (_pos, exprs) ->
-    let state, exprs_strings =
-      State.map (fun state -> string_of_expr state) [] state exprs
-    in
-    (state, "<" ^ String.concat " " exprs_strings ^ ">")
-  | Unit _pos -> (state, "<>")
+    let exprs_strings = List.map string_of_expr exprs in
+    "<" ^ String.concat " " exprs_strings ^ ">"
+  | Unit _pos -> "<>"
   | Vector (_pos, exprs) ->
-    let state, exprs_strings =
-      State.map (fun state -> string_of_expr state) [] state exprs
-    in
-    (state, Printf.sprintf "[%s]" (String.concat " " exprs_strings))
+    let exprs_strings = List.map string_of_expr exprs in
+    Printf.sprintf "[%s]" (String.concat " " exprs_strings)
   | Set (_pos, exprs) ->
-    let state, exprs_strings =
-      State.map (fun state -> string_of_expr state) [] state exprs
-    in
-    (state, Printf.sprintf "#{%s}#" (String.concat " " exprs_strings))
+    let exprs_strings = List.map string_of_expr exprs in
+    Printf.sprintf "#{%s}#" (String.concat " " exprs_strings)
   | Ann (_pos, t, e) ->
     let typ_string = Hmtype.string_of_typ t in
-    let state, expr_string = string_of_expr state e in
-    (state, Printf.sprintf "(: %s %s)" typ_string expr_string)
+    let expr_string = string_of_expr e in
+    Printf.sprintf "(: %s %s)" typ_string expr_string
   | Dict (_pos, keys_and_vals) ->
-    let state, keyvalue_strings =
-      State.map
-        (fun state (key, value) ->
-          let state, key_string = string_of_expr state key in
-          let state, value_string = string_of_expr state value in
-          (state, Printf.sprintf "%s %s" key_string value_string) )
-        []
-        state
+    let keyvalue_strings =
+      List.map
+        (fun (key, value) ->
+          let key_string = string_of_expr key in
+          let value_string = string_of_expr value in
+          Printf.sprintf "%s %s" key_string value_string )
         keys_and_vals
     in
-    (state, Printf.sprintf "{%s}" (String.concat " " keyvalue_strings))
+    Printf.sprintf "{%s}" (String.concat " " keyvalue_strings)
+  | IfThenElse (_pos, cond_e, then_e, else_e) ->
+    let cond_s = string_of_expr cond_e in
+    let then_s = string_of_expr then_e in
+    let else_s = string_of_expr else_e in
+    Printf.sprintf "(if %s %s %s)" cond_s then_s else_s
+  | Bool (_, true) -> "C:True"
+  | Bool (_, false) -> "C:False"
 
 
 module VarSet = Set.Make (String)
@@ -155,6 +151,11 @@ let rec free_vars (expr : expr) =
   | Ann (_, _, _)
   | Letrec (_, _, _, _) ->
     failwith "Haven't implemented free_vars of fancy expressions"
+  | IfThenElse (_pos, cond_e, then_e, else_e) ->
+    VarSet.union
+      (VarSet.union (free_vars cond_e) (free_vars then_e))
+      (free_vars else_e)
+  | Bool _ -> VarSet.empty
 
 
 let rec infer_type (env : Hmtype.typ_env) (exp : expr) :
@@ -162,6 +163,7 @@ let rec infer_type (env : Hmtype.typ_env) (exp : expr) :
   match exp with
   | Letrec (_, _, _, _) -> failwith "A bunch of type inferrence things not done"
   | Ann (_, t, e) ->
+    (* Util.debugprint "In Ann" []; *)
     let _env, e_type = infer_type env e in
     ( match Hmtype.unify t e_type with
     | Ok env -> (env, e_type)
@@ -173,7 +175,7 @@ let rec infer_type (env : Hmtype.typ_env) (exp : expr) :
             type %s, but is rather of \n\
             type %s\n\n\
            \           Unification err: %s           "
-           (snd (string_of_expr (-1, 'a') e))
+           (string_of_expr e)
            (Hmtype.string_of_typ t)
            (Hmtype.string_of_typ e_type)
            (Hmtype.string_of_unify_err unify_err) ) )
@@ -202,8 +204,7 @@ let rec infer_type (env : Hmtype.typ_env) (exp : expr) :
   | Sym (_, v) ->
     ( match List.assoc_opt v env with
     | Some t -> ([], Hmtype.instantiate t)
-    | None ->
-      failwith ("Unbound variable: " ^ snd (string_of_expr (-1, 'a') exp)) )
+    | None -> failwith ("Unbound variable: " ^ string_of_expr exp) )
   | Lam (_pos, (PSym (_, arg), body) :: _) ->
     let arg_t = Hmtype.gen_type_variable arg in
     let env' = (arg, arg_t) :: env in
@@ -220,19 +221,34 @@ let rec infer_type (env : Hmtype.typ_env) (exp : expr) :
       | Sym (_, fn_name) -> Hmtype.gen_type_variable (fn_name ^ "-result")
       | _ -> Hmtype.gen_type_variable ""
     in
-    let substs1, fun_t = infer_type env fn in
-    let substs2, arg_t =
-      infer_type (Hmtype.replace_substitutions_env substs1 env) arg
+    let fn_subst, fun_t = infer_type env fn in
+    let arg_subst, arg_t =
+      infer_type (Hmtype.replace_substitutions_env fn_subst env) arg
     in
+    (* Util.debugprint
+     *   "In App"
+     *   [ ("env", Hmtype.show_typ_env env)
+     *   ; ("fn", string_of_expr fn)
+     *   ; ("fn_subst", Hmtype.show_typ_env fn_subst)
+     *   ; ("arg", string_of_expr arg)
+     *   ; ("arg_subst", Hmtype.show_typ_env arg_subst)
+     *   ]; *)
     ( match
         Hmtype.unify
-          (Hmtype.replace_substitutions substs2 fun_t)
+          (Hmtype.replace_substitutions arg_subst fun_t)
           (TypeApp [ TypeConstant Arrow; arg_t; res_t ])
       with
     | Ok subst3 ->
-      ( List.fold_left Hmtype.compose_substitutions subst3 [ substs2; substs1 ]
+      ( List.fold_left
+          Hmtype.compose_substitutions
+          subst3
+          [ arg_subst; fn_subst ]
       , Hmtype.replace_substitutions subst3 res_t )
-    | Error e -> failwith (Hmtype.string_of_unify_err e) )
+    | Error e ->
+      failwith
+        (Printf.sprintf
+           "Wrong argument type given. Unification error: %s"
+           (Hmtype.string_of_unify_err e) ) )
   | Let (_, var, value, body) ->
     (* If var is referred to in value - i.e. if recursion happens *)
     if VarSet.mem var (free_vars value)
@@ -250,13 +266,55 @@ let rec infer_type (env : Hmtype.typ_env) (exp : expr) :
             body
         in
         (Hmtype.compose_substitutions s2 s1, t2)
-      | Error e -> failwith (Hmtype.string_of_unify_err e)
+      | Error e ->
+        failwith
+          (Printf.sprintf
+             "Let infer unification error: %s"
+             (Hmtype.string_of_unify_err e) )
     else
       let s1, t1 = infer_type env value in
       let t' = Hmtype.generalize (Hmtype.replace_substitutions_env s1 env) t1 in
       let env' = (var, t') :: env in
       let s2, t2 = infer_type (Hmtype.replace_substitutions_env s1 env') body in
       (Hmtype.compose_substitutions s2 s1, t2)
+  | Bool (_, _) -> (env, Hmtype.TypeConstant Hmtype.Boolean)
+  | IfThenElse (_, Sym (_cond_pos, cond_s), then_e, else_e) ->
+    let _then_subst, then_t = infer_type env then_e in
+    let _else_subst, else_t = infer_type env else_e in
+    (* Util.debugprint
+     *   "IfThenElse infer"
+     *   [ ("then_e", string_of_expr then_e)
+     *   ; ("then_t", Hmtype.string_of_typ then_t)
+     *   ; ("then_subst", Hmtype.show_typ_env then_subst)
+     *   ; ("else_e", string_of_expr else_e)
+     *   ; ("else_t", Hmtype.string_of_typ else_t)
+     *   ; ("else_subst", Hmtype.show_typ_env else_subst)
+     *   ]; *)
+    ( match Hmtype.unify then_t else_t with
+    | Error _unification_error -> failwith "Then and Else types mismatch"
+    | Ok _then_else_unification_subst ->
+      let cond_e : expr = Sym (_cond_pos, cond_s) in
+      let _cond_subst, cond_t = infer_type env cond_e in
+      ( match cond_t with
+      | Hmtype.TypeVariable cond_t_s ->
+        ((cond_t_s, Hmtype.TypeConstant Hmtype.Boolean) :: env, else_t)
+      | _ -> failwith "Don't know what to do if If cond_t isn't a variable" ) )
+  | IfThenElse (_, Bool _, then_e, else_e) ->
+    let _then_subst, then_t = infer_type env then_e in
+    let _else_subst, else_t = infer_type env else_e in
+    (* Util.debugprint
+     *   "IfThenElse infer"
+     *   [ ("then_e", string_of_expr then_e)
+     *   ; ("then_t", Hmtype.string_of_typ then_t)
+     *   ; ("then_subst", Hmtype.show_typ_env then_subst)
+     *   ; ("else_e", string_of_expr else_e)
+     *   ; ("else_t", Hmtype.string_of_typ else_t)
+     *   ; ("else_subst", Hmtype.show_typ_env else_subst)
+     *   ]; *)
+    ( match Hmtype.unify then_t else_t with
+    | Error _e -> failwith "Unifying boolean ifelsethen value failure"
+    | Ok _unification_subst -> (env, then_t) )
+  | IfThenElse (_, _, _, _) -> failwith "not done yet ifthenelse"
 
 
 let infer env (exp : expr) : Hmtype.typ =

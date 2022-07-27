@@ -2,7 +2,6 @@
  * tab-width: 2 -*- */
 
 /* Runtime */
-
 #include <gc.h>
 #include <hamt.h>
 #include <rrb.h>
@@ -33,6 +32,7 @@ struct tagged_value {
 union uvalue {
   char *string;
   unsigned char u8;
+  bool b;
   const RRB *vector;
   struct lambda lambda;
   value_hamt *dict;
@@ -49,6 +49,7 @@ union uvalue {
 enum runtime_type {
   STRING,
   U8,
+  BOOL,
   LAMBDA,
   VECTOR,
   DICT,
@@ -69,6 +70,8 @@ static inline unsigned int get_hash_from_value(value *expr) {
   case STRING:
     return get_hash(expr->actual_value.string);
   case U8:
+    return get_hash(toString(*expr).actual_value.string);
+  case BOOL:
     return get_hash(toString(*expr).actual_value.string);
   case LAMBDA:
     return get_hash(toString(*expr).actual_value.string);
@@ -213,6 +216,24 @@ value makeTaggedValue(char *tag, value *val) {
   return *v;
 }
 
+/* If/Else */
+static inline value makeBool(bool b) {
+  union uvalue *uv = (union uvalue *)malloc(sizeof(union uvalue));
+  struct value *v = (struct value *)malloc(sizeof(struct value));
+  uv->b = b;
+  v->type = BOOL;
+  v->actual_value = *uv;
+  return *v;
+}
+
+static inline value callIf(value cond, value then_, value else_) {
+  if (cond.type == BOOL && cond.actual_value.b == true) {
+    return then_;
+  } else {
+    return else_;
+  }
+}
+
 /* /\** */
 /*  * Reduce for dictionaries */
 /*  *\/ */
@@ -244,7 +265,8 @@ void *mallocValue(struct value v) {
 }
 
 value toString(value expr) {
-  if (expr.type == LAMBDA) {
+  switch (expr.type) {
+  case LAMBDA: {
     ssize_t buffer_size = snprintf(NULL, 0, "<procedure %ld %ld>",
                                    (long)expr.actual_value.lambda.fun,
                                    (long)expr.actual_value.lambda.ctx);
@@ -253,9 +275,11 @@ value toString(value expr) {
             (long)expr.actual_value.lambda.fun,
             (long)expr.actual_value.lambda.ctx);
     return makeString(return_string);
-  } else if (expr.type == UNIT) {
+  }
+  case UNIT: {
     return makeString("<>");
-  } else if (expr.type == TAGGED_VALUE) {
+  }
+  case TAGGED_VALUE: {
     value tagged_val;
     tagged_val.actual_value = expr.actual_value.tagged_value.val->actual_value;
     tagged_val.type = expr.actual_value.tagged_value.val->type;
@@ -264,17 +288,20 @@ value toString(value expr) {
                       " "),
                toString(tagged_val).actual_value.string),
         ")"));
-  } else if (expr.type == U8) {
+  }
+  case U8: {
     // Allocates storage
     ssize_t buffer_size = snprintf(NULL, 0, "%u", expr.actual_value.u8);
     char *return_string = (char *)malloc(buffer_size + 1);
     // Prints "Hello world!" on hello_world
     snprintf(return_string, buffer_size + 1, "%u", expr.actual_value.u8);
     return makeString(return_string);
-  } else if (expr.type == STRING) {
+  }
+  case STRING: {
     return makeString(
         sdscat(sdscat(sdsnew("\""), expr.actual_value.string), "\""));
-  } else if (expr.type == VECTOR) {
+  }
+  case VECTOR: {
     sds acc = "";
 
     uint32_t length = rrb_count(expr.actual_value.vector);
@@ -289,15 +316,21 @@ value toString(value expr) {
     acc = sdscat(sdsnew("["), acc);
     acc = sdscat(acc, "]");
     return makeString(acc);
-  } else if (expr.type == DICT) {
+  }
+  case DICT: {
     sds acc = "{";
     return makeString(acc);
-  } else {
+  }
+  case BOOL: {
+    return makeString(expr.actual_value.b ? "True" : "False");
+  }
+  case ENUM: {
     printf("Bad! toString got something it does not recognize, %d. \n",
            expr.type);
     puts("Error in the compiler lol n00b :o!\n");
     exit(1337);
-  };
+  }
+  }
 }
 
 void print(struct value v) { printf("%s", v.actual_value.string); }

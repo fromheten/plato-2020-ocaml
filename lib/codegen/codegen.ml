@@ -251,6 +251,15 @@ let rec generate (expression : Expr.expr) (state : state ref) : string =
     !code
   | Set (_, _) -> failwith "TODO codegen of set not yet implemented"
   | Ann (_, _, expression) -> generate expression state
+  | Bool (_pos, b) ->
+    code := "makeBool(" ^ string_of_bool b ^ ")";
+    !code
+  | IfThenElse (_pos, cond_e, then_e, else_e) ->
+    let cond_c = generate cond_e state in
+    let then_c = generate then_e state in
+    let else_c = generate else_e state in
+    code := Printf.sprintf "callIf(%s, %s, %s)" cond_c then_c else_c;
+    !code
 
 
 let generate_program expression =

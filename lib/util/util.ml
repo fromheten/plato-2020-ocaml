@@ -149,3 +149,34 @@ let unwrap res to_string =
   match res with
   | Ok x -> x
   | Error e -> failwith (to_string e)
+
+
+let rec fill_string (filling : string) (count : int) (acc : string) =
+  if count > 0 then fill_string filling (count - 1) (acc ^ filling) else acc
+
+
+let debugprint_format label examples =
+  let debugprint_inner indent_count examples =
+    let table_contents =
+      List.map (fun (label, text) -> label ^ ":\n" ^ text) examples
+    in
+    let formatted_table_contents =
+      List.map
+        (fun row -> fill_string "  " indent_count "" ^ row)
+        table_contents
+    in
+    String.concat "\n" formatted_table_contents
+  in
+  let label_underline = fill_string "#" (String.length label) "" in
+  "\n"
+  ^ label
+  ^ "\n"
+  ^ label_underline
+  ^ "\n"
+  ^ debugprint_inner 0 examples
+  ^ "\n"
+  ^ label_underline
+  ^ "\n"
+
+
+let debugprint label = comp print_string (debugprint_format label)

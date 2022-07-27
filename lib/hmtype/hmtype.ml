@@ -18,6 +18,7 @@ type 'a constant =
   | Boolean
   | Unit
   | Vector of 'a
+[@@deriving show]
 
 type typ =
   | TypeConstant of typ constant
@@ -25,6 +26,7 @@ type typ =
   | TypeApp of typ list
   (* (forall [a b] (-> a b a)) *)
   | TypeScheme of string list * typ list
+[@@deriving show]
 
 let rec string_of_constant = function
   | Integer -> "Integer"
@@ -111,7 +113,7 @@ let rec replace_substitutions (substitutions : (string * typ) list) (t : typ) :
     TypeScheme (args, List.map (replace_substitutions substitutions) xs)
 
 
-type typ_env = (string * typ) list
+type typ_env = (string * typ) list [@@deriving show]
 
 let replace_substitutions_env
     (substitutions : (string * typ) list) (env : typ_env) =
@@ -201,6 +203,13 @@ let rec unify (t1 : typ) (t2 : typ) : (typ_env, unify_err) result =
   else
     match (t1, t2) with
     | TypeApp (n1 :: ts1), TypeApp (n2 :: ts2) ->
+      (* Util.debugprint
+       *   "Unify inputs"
+       *   [ ("n1", string_of_typ n1)
+       *   ; ("ts1", String.concat "\n" (List.map string_of_typ ts1))
+       *   ; ("n2", string_of_typ n2)
+       *   ; ("ts2", String.concat "\n" (List.map string_of_typ ts2))
+       *   ]; *)
       if not (n1 = n2)
       then Error (TypeAppOfDifferentFunctor (n1, t2))
       else if not (List.length ts1 = List.length ts2)
@@ -216,7 +225,9 @@ let rec unify (t1 : typ) (t2 : typ) : (typ_env, unify_err) result =
                    (unify
                       (replace_substitutions substitutions t1)
                       (replace_substitutions substitutions t2) )
-                   string_of_unify_err
+                   (Util.comp
+                      (( ^ ) "Unify typeapp branch: ")
+                      string_of_unify_err )
                in
 
                compose_substitutions substitutions2 substitutions )
