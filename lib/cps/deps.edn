@@ -1,0 +1,2 @@
+{:deps {org.clojure/core.match {:mvn/version "1.0.0"}
+        prismatic/schema {:mvn/version "1.4.0"}}}

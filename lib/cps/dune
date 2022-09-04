@@ -1,0 +1,5 @@
+(library
+ (name cps)
+ (libraries yojson ppx_deriving_yojson.runtime expr)
+ (preprocess
+  (pps ppx_deriving.show)))
