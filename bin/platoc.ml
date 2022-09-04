@@ -81,9 +81,7 @@ let () =
   | Ok (_rest, Read.OutputExeToPath (_pos, _io_paths)) ->
     failwith "can't do this anymore"
   | Ok (_rest, Read.OutputCToPath (_pos, io_paths)) ->
-    let src =
-      Util.str (List.map Codegen.read_whole_file io_paths.input_files)
-    in
+    let src = Util.str (List.map Util.read_whole_file io_paths.input_files) in
     ( match compile src with
     | Ok c_source ->
       (* Write message to file *)
@@ -95,7 +93,7 @@ let () =
       (* flush and close the channel *)
     | Error e -> print_string (Util.str [ "Compilation Error: "; e ]) )
   | Ok (_, Run (_pos, src_path)) ->
-    let src = Codegen.read_whole_file src_path in
+    let src = Util.read_whole_file src_path in
     let out_path = "/tmp/plato_run_temp" in
     let c_out_path = String.concat "" [ out_path; ".c" ] in
     ( match compile src with

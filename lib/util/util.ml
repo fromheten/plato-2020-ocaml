@@ -184,3 +184,10 @@ let debugprint label = comp print_string (debugprint_format label)
 let pascal_case string =
   let first_char = String.get string 0 in
   first_char = Char.uppercase_ascii first_char
+
+
+let read_whole_file (filename : string) : string =
+  let ch = open_in filename in
+  let s = really_input_string ch (in_channel_length ch) in
+  close_in ch;
+  s

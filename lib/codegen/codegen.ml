@@ -4,14 +4,7 @@ let nt = "\n\t"
 
 let t = "\t"
 
-let read_whole_file (filename : string) : string =
-  let ch = open_in filename in
-  let s = really_input_string ch (in_channel_length ch) in
-  close_in ch;
-  s
-
-
-let runtime () = read_whole_file "runtime.c"
+let runtime () = Util.read_whole_file "runtime.c"
 
 type context =
   { name : string
