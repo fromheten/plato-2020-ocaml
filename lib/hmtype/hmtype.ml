@@ -18,6 +18,7 @@ type 'a constant =
   | Boolean
   | Unit
   | Vector of 'a
+  | Dict of 'a * 'a
 [@@deriving show]
 
 type typ =
@@ -36,6 +37,8 @@ let rec string_of_constant = function
   | Unit -> "Unit"
   (* | Vector child -> "[" ^ string_of_typ child ^ "]" *)
   | Vector child -> "(Vector " ^ string_of_typ child ^ ")"
+  | Dict (key_t, value_t) ->
+    "{" ^ string_of_typ key_t ^ " " ^ string_of_typ value_t ^ "}"
 
 
 and string_of_typ = function

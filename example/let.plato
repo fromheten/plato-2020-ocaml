@@ -1,3 +1,3 @@
 (let f (λ p p)
  (f ((λ passed (passed (passed "Success :)")))
-     (λ x x))))
+     f)))

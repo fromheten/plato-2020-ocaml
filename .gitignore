@@ -13,3 +13,4 @@ out/*
 docs/
 *.~undo-tree~
 *.nrepl-port
+*.cpcache

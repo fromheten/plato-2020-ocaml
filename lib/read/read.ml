@@ -776,6 +776,12 @@ let rec expression (source_code : source) : Expr.expr parseresult =
     source_code
 
 
+let parse_dangerously src =
+  match expression (0, Util.char_list src) with
+  | Ok (_src_rest, expr) -> expr
+  | Error e -> failwith ("parse_dangerously: " ^ e)
+
+
 let negpos = (-1, -1)
 
 let comp f g x = f (g x)
@@ -1002,21 +1008,12 @@ type io_paths =
   }
 
 type compiler_cmd =
-  | ShowPrintTests of Expr.position
   | OutputCToPath of Expr.position * io_paths
   | OutputExeToPath of Expr.position * io_paths
   | PrintHelp of Expr.position
   | PublishAndPrintIDFromSTDIN of Expr.position
   | NoCommandArguments of Expr.position
   | Run of Expr.position * string
-
-let parse_arg_test_results source =
-  (map
-     (literal "--tests")
-     (Util.take_ok (fun ((end_pos, rest), ()) ->
-          ((end_pos, rest), ShowPrintTests (fst source, end_pos)) ) ) )
-    source
-
 
 let parse_arg_run source =
   (map
@@ -1101,8 +1098,7 @@ let parse_args =
     (andThen
        symbol_native_string (* the name of the command *)
        (orElse_list
-          [ parse_arg_test_results
-          ; parse_output_c
+          [ parse_output_c
           ; parse_output_exe
           ; parse_publish
           ; parse_arg_run
@@ -1113,13 +1109,7 @@ let parse_args =
 
 
 let parse_args_tests =
-  [ ( "Print test results"
-    , let src = "platoc --test-results" in
-      parse_args (0, Util.char_list src)
-      =
-      let pos = (0, String.length src) in
-      Ok ((snd pos, []), ShowPrintTests pos) )
-  ; ( "Output C file"
+  [ ( "Output C file"
     , let src = "platoc --output-c myfile.c mysource.plato" in
       parse_args (0, Util.char_list src)
       =

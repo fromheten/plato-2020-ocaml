@@ -9,14 +9,13 @@ LD_C_FLAGS=LDFLAGS="-L$(PREFIX)/lib" CFLAGS='-I$(PREFIX)/include -Ofast'
 clean:
 	rm -rf target/ build/ bdwgc/ libatomic_ops/ c-rrb/ sds/ hash-array-mapped-trie/
 
-libatomic_ops/:
-	git clone https://github.com/ivmai/libatomic_ops.git # git://github.com/ivmai/libatomic_ops.git
+bdwgc/libatomic_ops/: bdwgc/
+	cd bdwgc/ && git clone https://github.com/ivmai/libatomic_ops.git # git://github.com/ivmai/libatomic_ops.git
 
-bdwgc/: libatomic_ops/
+bdwgc/:
 	git clone https://github.com/ivmai/bdwgc.git #git://github.com/ivmai/bdwgc.git
-	ln -s libatomic_ops bdwgc/libatomic_ops
 
-target/include/gc.h: bdwgc/
+target/include/gc.h: bdwgc/ bdwgc/libatomic_ops/
 	echo $(PREFIX)
 	mkdir -p target/include target/lib build
 	cp -R bdwgc build/bdwgc

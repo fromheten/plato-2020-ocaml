@@ -264,6 +264,11 @@ void *mallocValue(struct value v) {
   return (void *)ptr;
 }
 
+static inline value equals(value e0, value e1) {
+  return makeBool(
+      value_equals((void *)mallocValue(e0), (void *)mallocValue(e1)));
+}
+
 value toString(value expr) {
   switch (expr.type) {
   case LAMBDA: {

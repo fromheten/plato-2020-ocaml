@@ -180,3 +180,7 @@ let debugprint_format label examples =
 
 
 let debugprint label = comp print_string (debugprint_format label)
+
+let pascal_case string =
+  let first_char = String.get string 0 in
+  first_char = Char.uppercase_ascii first_char

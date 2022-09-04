@@ -1,60 +1,48 @@
 (* This is the main entrypoint of the Plato compiler *)
 let negpos = (-1, -1)
 
+let stdlib_types =
+  [ ( "="
+    , Hmtype.TypeScheme
+        ( [ "left__2"; "right__3" ]
+        , [ Hmtype.TypeConstant Hmtype.Arrow
+          ; Hmtype.TypeVariable "left__2"
+          ; Hmtype.TypeApp
+              [ Hmtype.TypeConstant Hmtype.Arrow
+              ; Hmtype.TypeVariable "right__3"
+              ; Hmtype.TypeConstant Hmtype.Boolean
+              ]
+          ] ) )
+  ]
+
+
+let stdlib = [ (Expr.PSym (negpos, "="), Expr.Builtin Equals) ]
+
+let rec add_stdlib stdlib expr =
+  match stdlib with
+  | (k, v) :: rest_of_stdlib ->
+    Expr.App
+      (negpos, Expr.Lam (negpos, [ (k, add_stdlib rest_of_stdlib expr) ]), v)
+  | [] -> expr
+
+
 let compile (src : string) : (string, string) result =
   match Read.expression (0, Util.char_list src) with
   | Ok (_rest, expr) ->
     Printf.printf "\nExpr: %s\n" (Expr.string_of_expr expr);
-    let type_result = Ok (Expr.infer [] expr) in
+    let type_result = Ok (Expr.infer stdlib_types expr) in
     ( match type_result with
     | Ok typ ->
       Printf.printf "Type: %s" (Hmtype.string_of_typ typ);
-      Ok (Codegen.generate_program expr)
+      let expr_preprocessed = Codegen.preprocess [] expr in
+      (* Util.debugprint
+       *   "Platoc Compile"
+       *   [ ("src", src)
+       *   ; ("expr_preprocessed", Expr.show_expr expr_preprocessed)
+       *   ]; *)
+      Ok (Codegen.generate_program expr_preprocessed)
     | Error e -> failwith (Printf.sprintf "Compilation error: %s" e) )
   | Error e -> Error (Util.str [ "`Platoc.compile` Error: e: "; e ])
-
-
-let test test_msg_pairs =
-  test_msg_pairs
-  |> List.map (fun (msg, test) ->
-         if test
-         then Util.str [ (* "OK: "; msg *) ]
-         else Util.str [ "Error: "; msg ] )
-  |> List.filter (fun s -> String.length s > 0)
-  |> (fun testcases ->
-       testcases
-       |> List.cons
-            (Util.str
-               [ "Passing tests: "
-               ; string_of_int
-                   (List.length test_msg_pairs - List.length testcases)
-               ; ". Failing tests: "
-               ; string_of_int (List.length testcases)
-               ] ) )
-  |> String.concat "\n"
-
-
-let print_tests_results =
-  List.concat
-    [ Read.literal_tests
-    ; Read.quoted_symbol_test
-    ; Read.strip_starting_spaces_tests
-    ; Read.n_or_more_tests
-    ; Read.lambda_tests
-    ; Read.symbol_tests
-    ; Read.set_tests
-    ; Read.vector_tests
-    ; Read.expression_tests
-    ; Read.tunit_tests
-    ; Read.typ_tests
-    ; Read.string_tests
-    ; Codegen.ocaml_import_tests
-    ; Read.string_of_expr_tests
-      (* ; Type_infer.type_infer_tests
-       * ; Type_infer.fresh_tests *)
-      (* ; Type.type_tests *)
-    ]
-  |> test
 
 
 let version = "0.0.0.0.0.1"
@@ -70,7 +58,6 @@ let help_string =
    source code and run the resulting program\n\
   \                   * `--publish` publishes from stdin and prints the hash \
    ID to stdout\n\
-  \                   * `--tests` to show test results\n\
   \                   "
 
 
@@ -91,8 +78,6 @@ let () =
       (0, Util.char_list (String.concat " " (Array.to_list Sys.argv)))
   with
   | Ok (_rest, Read.PrintHelp _) -> print_string help_string
-  | Ok (_rest, Read.ShowPrintTests _) ->
-    print_tests_results |> print_string |> print_newline |> print_newline
   | Ok (_rest, Read.OutputExeToPath (_pos, _io_paths)) ->
     failwith "can't do this anymore"
   | Ok (_rest, Read.OutputCToPath (_pos, io_paths)) ->

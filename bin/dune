@@ -6,4 +6,5 @@
   util
   hmtype
   codegen
+  cps
   cryptokit))

@@ -1,3 +1,5 @@
 (library
  (name expr)
- (libraries hmtype util state))
+ (libraries hmtype util state yojson ppx_deriving_yojson.runtime)
+ (preprocess
+  (pps ppx_deriving.show)))
