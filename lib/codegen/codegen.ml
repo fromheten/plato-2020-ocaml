@@ -190,9 +190,9 @@ let rec preprocess bound_vars expr =
 
 
 let rec generate (expression : Expr.expr) (state : state ref) : string =
-  Util.debugprint
-    "Codegen.generate"
-    [ ("expression", Expr.string_of_expr expression) ];
+  (* Util.debugprint *)
+  (*   "Codegen.generate" *)
+  (*   [ ("expression", Expr.string_of_expr expression) ]; *)
   let code = ref "" in
   match expression with
   (* Here I'm trying to make tail recursion work *)

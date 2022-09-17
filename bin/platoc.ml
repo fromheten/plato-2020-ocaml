@@ -30,6 +30,8 @@ let compile (src : string) : (string, string) result =
   match Read.expression (0, Util.char_list src) with
   | Ok (_rest, expr) ->
     Printf.printf "\nExpr: %s\n" (Expr.string_of_expr expr);
+    let cps,_counts = Cps.cps expr Cps.StringMap.empty Cps.AHALT Cps.StringMap.empty in
+    Printf.printf "\nCPS: %s\n" (Cps.show_target_language cps);
     let type_result = Ok (Expr.infer stdlib_types expr) in
     ( match type_result with
     | Ok typ ->
