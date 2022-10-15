@@ -11,6 +11,6 @@ out/*
 *.diff.md
 *.md.corrected
 docs/
-*.~undo-tree~
+*~undo-tree~*
 *.nrepl-port
 *.cpcache

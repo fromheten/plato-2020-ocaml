@@ -1,2 +1,2 @@
 ((λ x (if x "True" "fls"))
- False)
+ True)

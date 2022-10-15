@@ -7,4 +7,5 @@
   hmtype
   codegen
   cps
-  cryptokit))
+  cryptokit
+  schemecodegen))

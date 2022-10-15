@@ -1,0 +1,4 @@
+(library (name schemecodegen)
+ (libraries util yojson ppx_deriving_yojson.runtime expr)
+ (preprocess
+  (pps ppx_deriving.show)))

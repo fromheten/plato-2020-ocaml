@@ -34,16 +34,10 @@ let compile (src : string) : (string, string) result =
     Printf.printf "\nCPS: %s\n" (Cps.show_target_language cps);
     let type_result = Ok (Expr.infer stdlib_types expr) in
     ( match type_result with
-    | Ok typ ->
-      Printf.printf "Type: %s" (Hmtype.string_of_typ typ);
-      let expr_preprocessed = Codegen.preprocess [] expr in
-      (* Util.debugprint
-       *   "Platoc Compile"
-       *   [ ("src", src)
-       *   ; ("expr_preprocessed", Expr.show_expr expr_preprocessed)
-       *   ]; *)
-      Ok (Codegen.generate_program expr_preprocessed)
-    | Error e -> failwith (Printf.sprintf "Compilation error: %s" e) )
+      | Ok typ ->
+        Printf.printf "Type: %s" (Hmtype.string_of_typ typ);
+        Ok (Schemecodegen.generate expr)
+      | Error e -> failwith (Printf.sprintf "Compilation error: %s" e) )
   | Error e -> Error (Util.str [ "`Platoc.compile` Error: e: "; e ])
 
 
@@ -57,6 +51,7 @@ let help_string =
   \                   * `-oc` or `--output-c`: Generate C code from your Plato \
    program into a file, e.g. `platoc -oc /path/to/c_source.c myprogram.plato`\n\
   \                   * `--run <source file>`: Compile a file containing plato \
+  \                   * `--run-scheme <source file>`: Compile a file containing plato into Scheme and run it \
    source code and run the resulting program\n\
   \                   * `--publish` publishes from stdin and prints the hash \
    ID to stdout\n\
@@ -85,26 +80,26 @@ let () =
   | Ok (_rest, Read.OutputCToPath (_pos, io_paths)) ->
     let src = Util.str (List.map Util.read_whole_file io_paths.input_files) in
     ( match compile src with
-    | Ok c_source ->
-      (* Write message to file *)
-      let oc = open_out io_paths.output_file in
-      (* create or truncate file, return channel *)
-      Printf.fprintf oc "%s\n" c_source;
-      (* write something *)
-      close_out oc
+      | Ok c_source ->
+        (* Write message to file *)
+        let oc = open_out io_paths.output_file in
+        (* create or truncate file, return channel *)
+        Printf.fprintf oc "%s\n" c_source;
+        (* write something *)
+        close_out oc
       (* flush and close the channel *)
-    | Error e -> print_string (Util.str [ "Compilation Error: "; e ]) )
+      | Error e -> print_string (Util.str [ "Compilation Error: "; e ]) )
   | Ok (_, Run (_pos, src_path)) ->
     let src = Util.read_whole_file src_path in
     let out_path = "/tmp/plato_run_temp" in
     let c_out_path = String.concat "" [ out_path; ".c" ] in
     ( match compile src with
-    | Ok c_source ->
-      (* Write message to file *)
-      let output_file_channel = open_out c_out_path in
-      Printf.fprintf output_file_channel "%s\n" c_source;
-      close_out output_file_channel
-    | Error e -> print_string (Util.str [ "Compilation Error: "; e ]) );
+      | Ok c_source ->
+        (* Write message to file *)
+        let output_file_channel = open_out c_out_path in
+        Printf.fprintf output_file_channel "%s\n" c_source;
+        close_out output_file_channel
+      | Error e -> print_string (Util.str [ "Compilation Error: "; e ]) );
     let prefix = "/Users/martin/code/plato-2020-ocaml/thirdparty/target" in
     let compile_command =
       String.concat
@@ -124,6 +119,23 @@ let () =
     in
     let status_code = Sys.command compile_command in
     exit status_code
+  | Ok (_, RunScheme (_pos, src_path)) ->
+    let src = Util.read_whole_file src_path in
+    let out_path = "/tmp/plato_run_temp" in
+    (match Read.expression (0, Util.char_list src) with
+     | Ok (_rest, expr) ->
+       let code = "(print \"=============PROGRAM OUTPUT=============\")
+(print " ^ Schemecodegen.generate expr ^ ") (exit 0)" in
+       Printf.printf "code: %s" code;
+       (* Write message to file *)
+       let scheme_file_name = (out_path ^ ".scm") in
+       let output_file_channel = open_out scheme_file_name in
+       Printf.fprintf output_file_channel "%s\n" code;
+       close_out output_file_channel;
+       let compile_command = Printf.sprintf "/opt/homebrew/bin/csi %s" scheme_file_name in
+       let status_code = Sys.command compile_command in
+       Printf.printf "\nstatus_code: %d" status_code
+     | Error _e -> failwith "error")
   | Ok (_, PublishAndPrintIDFromSTDIN _pos) ->
     (* print_string (Cryptokit.hash_channel (Cryptokit.Hash.sha3 512)
        Stdlib.stdin); *)

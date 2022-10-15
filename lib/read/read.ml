@@ -1014,12 +1014,20 @@ type compiler_cmd =
   | PublishAndPrintIDFromSTDIN of Expr.position
   | NoCommandArguments of Expr.position
   | Run of Expr.position * string
+  | RunScheme of Expr.position * string
 
 let parse_arg_run source =
   (map
      (andThen (literal "--run") symbol_native_string)
      (Util.take_ok (fun ((end_pos, rest), ((), src_path)) ->
           ((end_pos, rest), Run ((fst source, end_pos), src_path)) ) ) )
+    source
+
+let parse_arg_run_scheme source =
+  (map
+     (andThen (literal "--run-scheme") symbol_native_string)
+     (Util.take_ok (fun ((end_pos, rest), ((), src_path)) ->
+          ((end_pos, rest), RunScheme ((fst source, end_pos), src_path)) ) ) )
     source
 
 
@@ -1101,6 +1109,7 @@ let parse_args =
           [ parse_output_c
           ; parse_output_exe
           ; parse_publish
+          ; parse_arg_run_scheme
           ; parse_arg_run
           ; print_help
           ; print_welcome
